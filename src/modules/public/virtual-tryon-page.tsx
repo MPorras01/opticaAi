@@ -17,7 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { AR_TEST_GLASSES } from '@/config/ar.config'
+import { resolveArOverlayUrl, resolveFitProfile } from '@/config/ar.config'
 import { formatCOP } from '@/lib/utils'
 import useCartStore from '@/stores/cart.store'
 import type { ProductWithCategory } from '@/types'
@@ -84,7 +84,8 @@ export function VirtualTryOnPage({ products, initialProductId }: VirtualTryOnPag
   const [snapshotDataUrl, setSnapshotDataUrl] = useState<string | null>(null)
   const [isSnapshotOpen, setIsSnapshotOpen] = useState(false)
 
-  const overlayUrl = selectedProduct?.ar_overlay_url || AR_TEST_GLASSES[0].overlayUrl
+  const overlayUrl = resolveArOverlayUrl(selectedProduct)
+  const fitProfile = resolveFitProfile(selectedProduct)
   const glassesName = selectedProduct?.name || 'Gafas de prueba'
 
   const handleSnapshot = (dataUrl: string) => {
@@ -158,6 +159,8 @@ export function VirtualTryOnPage({ products, initialProductId }: VirtualTryOnPag
               <VirtualTryOn
                 glassesImageUrl={overlayUrl}
                 glassesName={glassesName}
+                fitProfile={fitProfile}
+                product={selectedProduct}
                 onSnapshot={handleSnapshot}
               />
             ) : (
@@ -288,3 +291,5 @@ export function VirtualTryOnPage({ products, initialProductId }: VirtualTryOnPag
     </div>
   )
 }
+
+export default VirtualTryOnPage

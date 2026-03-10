@@ -5,10 +5,12 @@ import { Camera, Loader2 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { GlassesOverlay } from '@/components/ar/GlassesOverlay'
+import type { GlassesFitProfile } from '@/config/ar.config'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useCamera } from '@/hooks/useCamera'
 import { useFaceDetection } from '@/hooks/useFaceDetection'
+import type { ProductWithCategory } from '@/types'
 
 const dmSans = DM_Sans({
   subsets: ['latin'],
@@ -26,11 +28,20 @@ type TryOnPhase = 'idle' | 'requesting' | 'loading-model' | 'running' | 'error'
 type VirtualTryOnProps = {
   glassesImageUrl: string
   glassesName: string
+  fitProfile: GlassesFitProfile
+  product?: ProductWithCategory | null
   onSnapshot?: (dataUrl: string) => void
 }
 
-export function VirtualTryOn({ glassesImageUrl, glassesName, onSnapshot }: VirtualTryOnProps) {
+export function VirtualTryOn({
+  glassesImageUrl,
+  glassesName,
+  fitProfile,
+  product,
+  onSnapshot,
+}: VirtualTryOnProps) {
   const [phase, setPhase] = useState<TryOnPhase>('idle')
+  const [startupError, setStartupError] = useState<string | null>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
   const {
@@ -46,20 +57,25 @@ export function VirtualTryOn({ glassesImageUrl, glassesName, onSnapshot }: Virtu
   const {
     landmarks,
     isLoading,
+    fps,
     error: detectionError,
+    pauseDetection,
+    resumeDetection,
     startDetection,
     stopDetection,
   } = useFaceDetection({ videoRef })
 
-  const error = cameraError || detectionError
+  const error = startupError || cameraError || detectionError
   const uiPhase: TryOnPhase = error ? 'error' : phase
 
   const handleActivate = useCallback(async () => {
+    setStartupError(null)
     setPhase('requesting')
     await requestCamera()
   }, [requestCamera])
 
   const handleRetry = useCallback(async () => {
+    setStartupError(null)
     stopDetection()
     releaseCamera()
     setPhase('idle')
@@ -72,26 +88,34 @@ export function VirtualTryOn({ glassesImageUrl, glassesName, onSnapshot }: Virtu
       return
     }
 
-    let cancelled = false
-
     const runDetection = async () => {
       setPhase('loading-model')
-      await startDetection()
-      if (!cancelled && !detectionError) {
+      const startupTimeoutMs = 9000
+
+      await Promise.race([
+        startDetection(),
+        new Promise<never>((_, reject) => {
+          window.setTimeout(() => {
+            reject(new Error('Timeout iniciando deteccion facial'))
+          }, startupTimeoutMs)
+        }),
+      ])
+
+      if (!detectionError) {
         setPhase('running')
       }
     }
 
-    runDetection().catch(() => {
-      if (!cancelled) {
-        setPhase('error')
-      }
+    runDetection().catch((cause) => {
+      stopDetection()
+      setStartupError(
+        cause instanceof Error
+          ? `No se pudo iniciar rapido el modelo: ${cause.message}`
+          : 'No se pudo iniciar rapido el modelo de deteccion facial.'
+      )
+      setPhase('error')
     })
-
-    return () => {
-      cancelled = true
-    }
-  }, [detectionError, hasPermission, isReady, phase, startDetection])
+  }, [detectionError, hasPermission, isReady, phase, startDetection, stopDetection])
 
   useEffect(() => {
     return () => {
@@ -170,6 +194,8 @@ export function VirtualTryOn({ glassesImageUrl, glassesName, onSnapshot }: Virtu
         videoRef={videoRef}
         landmarks={landmarks}
         glassesImageUrl={glassesImageUrl}
+        fitProfile={fitProfile}
+        product={product}
         isFlipped
       />
 
@@ -195,10 +221,14 @@ export function VirtualTryOn({ glassesImageUrl, glassesName, onSnapshot }: Virtu
           <div className="absolute bottom-3 left-3 z-20 flex items-center gap-2">
             <Button
               onClick={() => {
+                pauseDetection()
                 const dataUrl = takeSnapshot()
                 if (dataUrl && onSnapshot) {
                   onSnapshot(dataUrl)
                 }
+                window.setTimeout(() => {
+                  resumeDetection()
+                }, 250)
               }}
               className={cn(
                 dmSans.className,
@@ -216,6 +246,18 @@ export function VirtualTryOn({ glassesImageUrl, glassesName, onSnapshot }: Virtu
               {glassesName}
             </span>
           </div>
+
+          {fps > 0 && fps < 8 ? (
+            <div className="absolute top-12 right-3 z-20 rounded-full bg-[#C33A2C]/90 px-3 py-1 text-xs text-[#FAFAF8]">
+              Tu dispositivo tiene dificultades con el probador
+            </div>
+          ) : null}
+
+          {fps >= 8 && fps < 15 ? (
+            <div className="absolute top-12 right-3 z-20 rounded-full bg-[#D4A853]/90 px-3 py-1 text-xs text-[#0F0F0D]">
+              Rendimiento bajo - intenta con mejor iluminacion
+            </div>
+          ) : null}
 
           {!landmarks ? (
             <div className="absolute right-3 bottom-14 z-20 [animation:fade-in_250ms_ease_2s_forwards] rounded-xl bg-[#0F0F0D]/75 px-3 py-2 text-xs text-[#FAFAF8] opacity-0">

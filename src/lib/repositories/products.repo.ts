@@ -107,6 +107,35 @@ export async function getProductBySlug(slug: string): Promise<ProductWithCategor
   }
 }
 
+/** Retrieves a single product by id including category relation. */
+export async function getProductById(id: string): Promise<ProductWithCategory> {
+  try {
+    const supabase = await getReadClient()
+
+    const { data, error } = await supabase
+      .from('products')
+      .select(PRODUCT_WITH_CATEGORY_SELECT)
+      .eq('id', id)
+      .maybeSingle()
+
+    if (error) {
+      throw error
+    }
+
+    if (!data) {
+      throw new Error('Producto no encontrado')
+    }
+
+    return data as ProductWithCategory
+  } catch (error) {
+    if (error instanceof Error && error.message === 'Producto no encontrado') {
+      throw error
+    }
+
+    throw new Error(`No se pudo obtener el producto por id: ${getErrorMessage(error)}`)
+  }
+}
+
 /** Retrieves active products for a category with optional limit. */
 export async function getProductsByCategory(
   categorySlug: string,
@@ -271,5 +300,30 @@ export async function toggleProductActive(id: string): Promise<Product> {
     return updated as Product
   } catch (error) {
     throw new Error(`No se pudo alternar el estado del producto: ${getErrorMessage(error)}`)
+  }
+}
+
+/** Updates AR calibration values for a product with admin privileges. */
+export async function updateProductArCalibration(
+  id: string,
+  data: Pick<ProductUpdate, 'ar_fit_profile' | 'ar_width_adjustment' | 'ar_vertical_adjustment'>
+): Promise<Product> {
+  try {
+    const supabase = createAdminClient()
+
+    const { data: updated, error } = await supabase
+      .from('products')
+      .update(data)
+      .eq('id', id)
+      .select('*')
+      .single()
+
+    if (error) {
+      throw error
+    }
+
+    return updated as Product
+  } catch (error) {
+    throw new Error(`No se pudo actualizar la calibracion AR: ${getErrorMessage(error)}`)
   }
 }

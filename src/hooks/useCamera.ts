@@ -13,6 +13,7 @@ type UseCameraResult = {
 
 export function useCamera(): UseCameraResult {
   const videoRef = useRef<HTMLVideoElement>(null)
+  const streamRef = useRef<MediaStream | null>(null)
   const [stream, setStream] = useState<MediaStream | null>(null)
   const [hasPermission, setHasPermission] = useState<boolean | null>(null)
   const [isReady, setIsReady] = useState(false)
@@ -20,6 +21,7 @@ export function useCamera(): UseCameraResult {
 
   const releaseCamera = useCallback(() => {
     const activeVideo = videoRef.current
+    const activeStream = streamRef.current
 
     if (activeVideo?.srcObject) {
       const attachedStream = activeVideo.srcObject as MediaStream
@@ -27,13 +29,14 @@ export function useCamera(): UseCameraResult {
       activeVideo.srcObject = null
     }
 
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop())
+    if (activeStream) {
+      activeStream.getTracks().forEach((track) => track.stop())
     }
 
+    streamRef.current = null
     setStream(null)
     setIsReady(false)
-  }, [stream])
+  }, [])
 
   const requestCamera = useCallback(async () => {
     setError(null)
@@ -48,13 +51,41 @@ export function useCamera(): UseCameraResult {
     try {
       releaseCamera()
 
-      const requestedStream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: 640,
-          height: 480,
-          facingMode: 'user',
+      const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent)
+      const resolution = isMobile ? { width: 480, height: 360 } : { width: 640, height: 480 }
+
+      const tryConstraints: MediaStreamConstraints[] = [
+        {
+          video: {
+            facingMode: { ideal: 'user' },
+            width: { ideal: resolution.width },
+            height: { ideal: resolution.height },
+          },
         },
-      })
+        {
+          video: {
+            width: { ideal: resolution.width },
+            height: { ideal: resolution.height },
+          },
+        },
+        { video: true },
+      ]
+
+      let requestedStream: MediaStream | null = null
+      let lastError: unknown = null
+
+      for (const constraints of tryConstraints) {
+        try {
+          requestedStream = await navigator.mediaDevices.getUserMedia(constraints)
+          break
+        } catch (errorOnTry) {
+          lastError = errorOnTry
+        }
+      }
+
+      if (!requestedStream) {
+        throw lastError instanceof Error ? lastError : new Error('No se pudo abrir la camara')
+      }
 
       const video = videoRef.current
       if (!video) {
@@ -62,20 +93,28 @@ export function useCamera(): UseCameraResult {
         throw new Error('No se encontro el elemento de video para la camara')
       }
 
+      streamRef.current = requestedStream
       setStream(requestedStream)
       setHasPermission(true)
 
-      await new Promise<void>((resolve) => {
-        const handleLoadedData = () => {
-          video.removeEventListener('loadeddata', handleLoadedData)
-          resolve()
-        }
-
-        video.addEventListener('loadeddata', handleLoadedData)
-        video.srcObject = requestedStream
-      })
-
+      video.muted = true
+      video.playsInline = true
+      video.srcObject = requestedStream
       await video.play()
+
+      // Some browsers resolve play() before dimensions are available.
+      // Wait until metadata is ready so downstream logic can read videoWidth/videoHeight.
+      if (video.readyState < HTMLMediaElement.HAVE_METADATA) {
+        await new Promise<void>((resolve) => {
+          const handleLoadedMetadata = () => {
+            video.removeEventListener('loadedmetadata', handleLoadedMetadata)
+            resolve()
+          }
+
+          video.addEventListener('loadedmetadata', handleLoadedMetadata)
+        })
+      }
+
       setIsReady(true)
     } catch (cameraError) {
       releaseCamera()

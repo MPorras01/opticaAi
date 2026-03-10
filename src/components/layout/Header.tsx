@@ -98,6 +98,11 @@ export function Header() {
               <li key={item.href}>
                 <Link
                   href={item.href}
+                  onMouseEnter={() => {
+                    if (item.href === '/probador-virtual') {
+                      void import('@mediapipe/face_mesh')
+                    }
+                  }}
                   className={cn(
                     dmSans.className,
                     'relative inline-flex text-[0.95rem] font-medium tracking-[0.02em] text-[#0F0F0D]/85 transition-colors duration-300 hover:text-[#0F0F0D]',

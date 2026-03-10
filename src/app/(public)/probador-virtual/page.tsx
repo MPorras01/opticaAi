@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 
 import { getProducts } from '@/lib/repositories'
-import { VirtualTryOnPage } from '@/modules/public/virtual-tryon-page'
+import { VirtualTryOnLazy } from '@/modules/public/virtual-tryon-lazy'
 import type { ProductWithCategory } from '@/types'
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>
@@ -31,5 +31,5 @@ export default async function VirtualTryOnRoute({ searchParams }: { searchParams
     products = []
   }
 
-  return <VirtualTryOnPage products={products} initialProductId={selectedId} />
+  return <VirtualTryOnLazy products={products} initialProductId={selectedId} />
 }

@@ -5,11 +5,14 @@ import {
   createProduct,
   getProducts,
   getFeaturedProducts,
+  getProductById,
   getProductBySlug,
   getProductsByCategory,
   toggleProductActive,
+  updateProductArCalibration,
   updateProduct,
 } from '@/lib/repositories/products.repo'
+import { createClient as createServerClient } from '@/lib/supabase/server'
 import type {
   Product,
   ProductFilters,
@@ -44,6 +47,15 @@ export async function getProductBySlugAction(
 ): Promise<ActionResult<ProductWithCategory>> {
   try {
     const data = await getProductBySlug(slug)
+    return { success: true, data }
+  } catch (error) {
+    return { success: false, error: getErrorMessage(error) }
+  }
+}
+
+export async function getProductByIdAction(id: string): Promise<ActionResult<ProductWithCategory>> {
+  try {
+    const data = await getProductById(id)
     return { success: true, data }
   } catch (error) {
     return { success: false, error: getErrorMessage(error) }
@@ -105,6 +117,58 @@ export async function toggleProductActiveAction(id: string): Promise<ActionResul
 
     revalidatePath('/')
     revalidatePath('/admin/productos')
+
+    return { success: true, data }
+  } catch (error) {
+    return { success: false, error: getErrorMessage(error) }
+  }
+}
+
+type ArCalibrationInput = {
+  ar_fit_profile: 'FULL_FRAME' | 'SEMI_RIMLESS' | 'RIMLESS' | 'OVERSIZED' | 'SPORTS'
+  ar_width_adjustment: number
+  ar_vertical_adjustment: number
+}
+
+export async function updateProductArCalibrationAction(
+  id: string,
+  input: ArCalibrationInput
+): Promise<ActionResult<Product>> {
+  try {
+    const supabase = await createServerClient()
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser()
+
+    if (userError) {
+      throw userError
+    }
+
+    if (!user) {
+      return { success: false, error: 'No autenticado' }
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+
+    if (profileError) {
+      throw profileError
+    }
+
+    if (profile.role !== 'admin') {
+      return { success: false, error: 'No autorizado' }
+    }
+
+    const data = await updateProductArCalibration(id, input)
+
+    revalidatePath('/admin/productos')
+    revalidatePath(`/admin/productos/${id}/calibrar-ar`)
+    revalidatePath('/probador-virtual')
 
     return { success: true, data }
   } catch (error) {

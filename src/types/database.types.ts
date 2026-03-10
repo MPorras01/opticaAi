@@ -240,7 +240,10 @@ export type Database = {
       }
       products: {
         Row: {
+          ar_fit_profile: string | null
           ar_overlay_url: string | null
+          ar_vertical_adjustment: number | null
+          ar_width_adjustment: number | null
           brand: string | null
           category_id: string | null
           color: string | null
@@ -262,7 +265,10 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          ar_fit_profile?: string | null
           ar_overlay_url?: string | null
+          ar_vertical_adjustment?: number | null
+          ar_width_adjustment?: number | null
           brand?: string | null
           category_id?: string | null
           color?: string | null
@@ -284,7 +290,10 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          ar_fit_profile?: string | null
           ar_overlay_url?: string | null
+          ar_vertical_adjustment?: number | null
+          ar_width_adjustment?: number | null
           brand?: string | null
           category_id?: string | null
           color?: string | null
