@@ -5,6 +5,14 @@ export type GlassesFitProfile = {
   bridgeOffset: number
 }
 
+export const AR_TEST_GLASSES = [
+  {
+    id: 'test-1',
+    name: 'Clasica Negra',
+    overlayUrl: 'https://i.imgur.com/8X4Zs7P.png',
+  },
+] as const
+
 export const LANDMARK_INDICES = {
   LEFT_EYE_OUTER: 33,
   RIGHT_EYE_OUTER: 263,
@@ -28,8 +36,8 @@ export const GLASSES_FIT_PROFILES: Record<
   GlassesFitProfile
 > = {
   FULL_FRAME: {
-    widthFactor: 1.6,
-    heightFactor: 0.42,
+    widthFactor: 1.05,
+    heightFactor: 0.4,
     verticalOffset: 0.0,
     bridgeOffset: 0.0,
   },
@@ -60,6 +68,8 @@ export const GLASSES_FIT_PROFILES: Record<
 }
 
 export type FitProfileKey = keyof typeof GLASSES_FIT_PROFILES
+
+export const DEBUG_MODE = false
 
 export const AR_SETTINGS = {
   videoWidth: 640,
@@ -138,7 +148,7 @@ type ProductOverlayInput = {
 }
 
 const PRODUCT_OVERLAY_BY_SLUG: Record<string, string> = {
-  'ray-ban-clubmaster-rb3016': '/ar-glasses-clubmaster.svg',
+  'ray-ban-clubmaster-rb3016': AR_TEST_GLASSES[0].overlayUrl,
   'oakley-metalink-ox8153': '/ar-glasses-rectangular.svg',
   'persol-po0714-folding': '/ar-glasses-aviator.svg',
   'polaroid-pld-6067-s': '/ar-glasses-oval.svg',
@@ -159,7 +169,7 @@ const OVERLAY_BY_FRAME_SHAPE: Record<string, string> = {
 
 export function resolveArOverlayUrl(product: ProductOverlayInput | null): string {
   if (!product) {
-    return '/ar-glasses-clubmaster.svg'
+    return AR_TEST_GLASSES[0].overlayUrl
   }
 
   if (product.ar_overlay_url) {
@@ -184,7 +194,7 @@ export function resolveArOverlayUrl(product: ProductOverlayInput | null): string
     return '/ar-glasses-kids.svg'
   }
 
-  return '/ar-glasses-clubmaster.svg'
+  return AR_TEST_GLASSES[0].overlayUrl
 }
 
 export function resolveFitProfile(product: ProductOverlayInput | null): GlassesFitProfile {

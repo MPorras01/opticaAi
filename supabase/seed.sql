@@ -296,6 +296,10 @@ on conflict (slug) do update set
   ar_overlay_url = excluded.ar_overlay_url,
   metadata = excluded.metadata;
 
+update public.products
+set ar_overlay_url = 'https://www.freepnglogos.com/uploads/sunglasses-png/sunglasses-png-transparent-images-download-clip-art-4.png'
+where has_ar_overlay = true;
+
 commit;
 
 -- Manual admin setup:

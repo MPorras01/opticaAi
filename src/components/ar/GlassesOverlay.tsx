@@ -4,11 +4,11 @@ import { useEffect, useRef } from 'react'
 
 import {
   AR_SETTINGS,
+  DEBUG_MODE,
   GLASSES_FIT_PROFILES,
   LANDMARK_INDICES,
   angleBetween,
   distance,
-  midpoint,
   toPixels,
   type GlassesFitProfile,
 } from '@/config/ar.config'
@@ -99,10 +99,6 @@ export function GlassesOverlay({
       const needed = [
         LANDMARK_INDICES.LEFT_EYE_OUTER,
         LANDMARK_INDICES.RIGHT_EYE_OUTER,
-        LANDMARK_INDICES.LEFT_TEMPLE,
-        LANDMARK_INDICES.RIGHT_TEMPLE,
-        LANDMARK_INDICES.NOSE_BRIDGE_TOP,
-        LANDMARK_INDICES.NOSE_BRIDGE_MID,
         LANDMARK_INDICES.LEFT_EYEBROW_INNER,
         LANDMARK_INDICES.RIGHT_EYEBROW_INNER,
       ]
@@ -114,38 +110,19 @@ export function GlassesOverlay({
 
       const leftEyeOuter = toPixels(landmarks[LANDMARK_INDICES.LEFT_EYE_OUTER], W, H)
       const rightEyeOuter = toPixels(landmarks[LANDMARK_INDICES.RIGHT_EYE_OUTER], W, H)
-      const leftTemple = toPixels(landmarks[LANDMARK_INDICES.LEFT_TEMPLE], W, H)
-      const rightTemple = toPixels(landmarks[LANDMARK_INDICES.RIGHT_TEMPLE], W, H)
-      const noseBridgeTop = toPixels(landmarks[LANDMARK_INDICES.NOSE_BRIDGE_TOP], W, H)
-      const noseBridgeMid = toPixels(landmarks[LANDMARK_INDICES.NOSE_BRIDGE_MID], W, H)
-      const leftEyebrow = toPixels(landmarks[LANDMARK_INDICES.LEFT_EYEBROW_INNER], W, H)
-      const rightEyebrow = toPixels(landmarks[LANDMARK_INDICES.RIGHT_EYEBROW_INNER], W, H)
+      const leftEyebrowInner = toPixels(landmarks[LANDMARK_INDICES.LEFT_EYEBROW_INNER], W, H)
+      const rightEyebrowInner = toPixels(landmarks[LANDMARK_INDICES.RIGHT_EYEBROW_INNER], W, H)
 
-      const fitKey =
-        product?.ar_fit_profile && product.ar_fit_profile in GLASSES_FIT_PROFILES
-          ? (product.ar_fit_profile as keyof typeof GLASSES_FIT_PROFILES)
-          : null
+      const eyeDistance = distance(leftEyeOuter, rightEyeOuter)
+      const glassesWidth = eyeDistance * 2.4
 
-      const baseProfile = fitKey ? GLASSES_FIT_PROFILES[fitKey] : fitProfile
+      const centerX = (leftEyeOuter.x + rightEyeOuter.x) / 2
 
-      const effectiveProfile: GlassesFitProfile = {
-        ...baseProfile,
-        widthFactor: baseProfile.widthFactor * (product?.ar_width_adjustment ?? 1.0),
-        verticalOffset: baseProfile.verticalOffset + (product?.ar_vertical_adjustment ?? 0.0),
-      }
+      const eyeCenterY = (leftEyeOuter.y + rightEyeOuter.y) / 2
+      const browCenterY = (leftEyebrowInner.y + rightEyebrowInner.y) / 2
+      const centerY = browCenterY + (eyeCenterY - browCenterY) * 0.3
 
-      const templeDistance = distance(leftTemple, rightTemple)
-      const glassesWidth = templeDistance * effectiveProfile.widthFactor
-
-      const eyeCenter = midpoint(leftEyeOuter, rightEyeOuter)
-      const eyebrowCenter = midpoint(leftEyebrow, rightEyebrow)
-      const verticalRef = midpoint(noseBridgeTop, eyebrowCenter)
-      const centerX = eyeCenter.x
-      const centerY =
-        verticalRef.y + effectiveProfile.verticalOffset * H + effectiveProfile.bridgeOffset * H
-
-      const bridgeDeltaY = noseBridgeMid.y - noseBridgeTop.y
-      const glassesHeight = glassesWidth * effectiveProfile.heightFactor + bridgeDeltaY * 0.08
+      const glassesHeight = glassesWidth * 0.38
       const angle = angleBetween(leftEyeOuter, rightEyeOuter)
 
       let glassesImg: HTMLImageElement
@@ -159,14 +136,81 @@ export function GlassesOverlay({
       if (isFlipped) {
         ctx.translate(W, 0)
         ctx.scale(-1, 1)
-        const mirroredX = W - centerX
-        ctx.translate(mirroredX, centerY)
+        ctx.translate(centerX, centerY)
       } else {
         ctx.translate(centerX, centerY)
       }
       ctx.rotate(angle)
-      ctx.drawImage(glassesImg, -glassesWidth / 2, -glassesHeight / 2, glassesWidth, glassesHeight)
+
+      const drawWidth = Math.max(1, Math.round(glassesWidth))
+      const drawHeight = Math.max(1, Math.round(glassesHeight))
+
+      const offscreen = document.createElement('canvas')
+      offscreen.width = drawWidth
+      offscreen.height = drawHeight
+      const offCtx = offscreen.getContext('2d')
+
+      if (offCtx) {
+        offCtx.drawImage(glassesImg, 0, 0, drawWidth, drawHeight)
+        const imageData = offCtx.getImageData(0, 0, drawWidth, drawHeight)
+        const data = imageData.data
+
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i]
+          const g = data[i + 1]
+          const b = data[i + 2]
+          const brightness = (r + g + b) / 3
+
+          if (brightness > 230) {
+            data[i + 3] = 0
+          } else if (brightness > 200) {
+            data[i + 3] = Math.round((255 - brightness) * 2.5)
+          }
+        }
+
+        offCtx.putImageData(imageData, 0, 0)
+        ctx.drawImage(offscreen, -glassesWidth / 2, -glassesHeight / 2, glassesWidth, glassesHeight)
+      } else {
+        ctx.drawImage(
+          glassesImg,
+          -glassesWidth / 2,
+          -glassesHeight / 2,
+          glassesWidth,
+          glassesHeight
+        )
+      }
       ctx.restore()
+
+      if (DEBUG_MODE) {
+        const debugPoints = [
+          { lm: landmarks[234], color: '#ff0000', label: 'L-temple' },
+          { lm: landmarks[454], color: '#ff0000', label: 'R-temple' },
+          { lm: landmarks[33], color: '#00ff00', label: 'L-eye' },
+          { lm: landmarks[263], color: '#00ff00', label: 'R-eye' },
+          { lm: landmarks[107], color: '#0000ff', label: 'L-brow' },
+          { lm: landmarks[336], color: '#0000ff', label: 'R-brow' },
+          { lm: landmarks[6], color: '#ffff00', label: 'bridge' },
+        ]
+
+        debugPoints.forEach(({ lm, color, label }) => {
+          if (!lm) {
+            return
+          }
+
+          const p = toPixels(lm, W, H)
+          const px = isFlipped ? W - p.x : p.x
+          const py = p.y
+
+          ctx.beginPath()
+          ctx.arc(px, py, 5, 0, Math.PI * 2)
+          ctx.fillStyle = color
+          ctx.fill()
+
+          ctx.fillStyle = 'white'
+          ctx.font = '10px monospace'
+          ctx.fillText(label, px + 7, py + 4)
+        })
+      }
     })
 
     return () => {
