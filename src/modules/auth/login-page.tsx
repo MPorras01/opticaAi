@@ -1,4 +1,4 @@
-import { PageShell } from "@shared/ui/page-shell";
+import { PageShell } from '@shared/ui/page-shell'
 
 export function LoginPage() {
   return (
@@ -6,5 +6,5 @@ export function LoginPage() {
       title="Iniciar sesion"
       description="Ruta agrupada en (auth). Aqui vivira el flujo de autenticacion."
     />
-  );
+  )
 }

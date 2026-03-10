@@ -1,5 +1,5 @@
-import { LoginPage } from "@auth/login-page";
+import { LoginPage } from '@auth/login-page'
 
 export default function LoginRoute() {
-  return <LoginPage />;
+  return <LoginPage />
 }
