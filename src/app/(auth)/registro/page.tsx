@@ -1,4 +1,4 @@
-import { LoginPage } from '@auth/login-page'
+import { RegisterPage } from '@auth/register-page'
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>
 
@@ -10,10 +10,9 @@ function getFirstValue(value: string | string[] | undefined): string | undefined
   return value
 }
 
-export default async function LoginRoute({ searchParams }: { searchParams: SearchParams }) {
+export default async function RegisterRoute({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams
-  const registered = getFirstValue(params.registered) === 'true'
   const redirectTo = getFirstValue(params.redirectTo)
 
-  return <LoginPage registered={registered} redirectTo={redirectTo} />
+  return <RegisterPage redirectTo={redirectTo} />
 }
