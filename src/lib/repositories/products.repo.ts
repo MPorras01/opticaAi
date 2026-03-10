@@ -14,10 +14,18 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Error desconocido'
 }
 
+async function getReadClient() {
+  try {
+    return await createServerClient()
+  } catch {
+    return createAdminClient()
+  }
+}
+
 /** Retrieves active products with optional catalog filters. */
 export async function getProducts(filters?: ProductFilters): Promise<ProductWithCategory[]> {
   try {
-    const supabase = await createServerClient()
+    const supabase = await getReadClient()
 
     const useInnerCategory = Boolean(filters?.categorySlug)
     const selectClause = useInnerCategory ? '*, categories!inner(*)' : PRODUCT_WITH_CATEGORY_SELECT
@@ -72,7 +80,7 @@ export async function getProducts(filters?: ProductFilters): Promise<ProductWith
 /** Retrieves a single product by slug including its category. */
 export async function getProductBySlug(slug: string): Promise<ProductWithCategory> {
   try {
-    const supabase = await createServerClient()
+    const supabase = await getReadClient()
 
     const { data, error } = await supabase
       .from('products')
@@ -105,7 +113,7 @@ export async function getProductsByCategory(
   limit = 8
 ): Promise<ProductWithCategory[]> {
   try {
-    const supabase = await createServerClient()
+    const supabase = await getReadClient()
 
     const { data, error } = await supabase
       .from('products')
@@ -128,7 +136,7 @@ export async function getProductsByCategory(
 /** Retrieves latest active products as featured items. */
 export async function getFeaturedProducts(limit = 6): Promise<Product[]> {
   try {
-    const supabase = await createServerClient()
+    const supabase = await getReadClient()
 
     const { data, error } = await supabase
       .from('products')
@@ -153,7 +161,7 @@ export async function getRelatedProducts(
   categoryId: string
 ): Promise<Product[]> {
   try {
-    const supabase = await createServerClient()
+    const supabase = await getReadClient()
 
     const { data, error } = await supabase
       .from('products')
@@ -171,6 +179,23 @@ export async function getRelatedProducts(
     return (data ?? []) as Product[]
   } catch (error) {
     throw new Error(`No se pudieron obtener productos relacionados: ${getErrorMessage(error)}`)
+  }
+}
+
+/** Retrieves active product slugs for static params generation. */
+export async function getProductSlugs(): Promise<Array<{ slug: string }>> {
+  try {
+    const supabase = await getReadClient()
+
+    const { data, error } = await supabase.from('products').select('slug').eq('is_active', true)
+
+    if (error) {
+      throw error
+    }
+
+    return (data ?? []) as Array<{ slug: string }>
+  } catch (error) {
+    throw new Error(`No se pudieron obtener slugs de productos: ${getErrorMessage(error)}`)
   }
 }
 

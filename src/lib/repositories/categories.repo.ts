@@ -6,10 +6,18 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Error desconocido'
 }
 
+async function getReadClient() {
+  try {
+    return await createServerClient()
+  } catch {
+    return createAdminClient()
+  }
+}
+
 /** Retrieves all active categories ordered by name. */
 export async function getCategories(): Promise<Category[]> {
   try {
-    const supabase = await createServerClient()
+    const supabase = await getReadClient()
 
     const { data, error } = await supabase
       .from('categories')
@@ -30,7 +38,7 @@ export async function getCategories(): Promise<Category[]> {
 /** Retrieves a category by slug and throws if it does not exist. */
 export async function getCategoryBySlug(slug: string): Promise<Category> {
   try {
-    const supabase = await createServerClient()
+    const supabase = await getReadClient()
 
     const { data, error } = await supabase
       .from('categories')
