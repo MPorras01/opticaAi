@@ -23,6 +23,7 @@ type GlassesOverlayProps = {
   fitProfile: GlassesFitProfile
   product?: ProductWithCategory | null
   isFlipped?: boolean
+  forceDebug?: boolean
 }
 
 export function GlassesOverlay({
@@ -33,6 +34,7 @@ export function GlassesOverlay({
   fitProfile,
   product,
   isFlipped = true,
+  forceDebug = false,
 }: GlassesOverlayProps) {
   const imageCache = useRef<Map<string, HTMLImageElement>>(new Map())
   const renderPending = useRef(false)
@@ -181,7 +183,7 @@ export function GlassesOverlay({
       }
       ctx.restore()
 
-      if (DEBUG_MODE) {
+      if (DEBUG_MODE || forceDebug) {
         const debugPoints = [
           { lm: landmarks[234], color: '#ff0000', label: 'L-temple' },
           { lm: landmarks[454], color: '#ff0000', label: 'R-temple' },
@@ -217,7 +219,7 @@ export function GlassesOverlay({
       window.cancelAnimationFrame(frame)
       renderPending.current = false
     }
-  }, [canvasRef, fitProfile, glassesImageUrl, isFlipped, landmarks, product, videoRef])
+  }, [canvasRef, fitProfile, forceDebug, glassesImageUrl, isFlipped, landmarks, product, videoRef])
 
   return null
 }
