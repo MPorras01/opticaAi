@@ -190,9 +190,10 @@ export function ProductDetail({ product, relatedProducts, whatsappHref }: Produc
                   href={`/probador-virtual?productId=${product.id}`}
                   className={
                     dmSans.className +
-                    ' inline-flex h-11 w-full items-center justify-center rounded-full border border-[#0F0F0D] text-sm font-medium text-[#0F0F0D] transition duration-300 hover:scale-[1.02] hover:bg-[#F0EDE6]'
+                    ' inline-flex h-11 w-full items-center justify-center gap-2 rounded-full border border-[#D4A853] text-sm font-semibold text-[#D4A853] transition duration-300 hover:scale-[1.02] hover:bg-[#D4A853] hover:text-[#0F0F0D]'
                   }
                 >
+                  <span aria-hidden="true">👓</span>
                   Probarme estas gafas
                 </Link>
               )}

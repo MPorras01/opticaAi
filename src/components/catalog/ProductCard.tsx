@@ -25,6 +25,9 @@ type ProductCardProps = {
   priority?: boolean
 }
 
+const UNSPLASH_FALLBACK_IMAGE =
+  'https://images.unsplash.com/photo-1574258495973-f010dfbb5371?w=400&h=400&fit=crop&q=80'
+
 export function ProductCard({ product, priority = false }: ProductCardProps) {
   const addItem = useCartStore((state) => state.addItem)
   const openCart = useCartStore((state) => state.openCart)
@@ -39,7 +42,7 @@ export function ProductCard({ product, priority = false }: ProductCardProps) {
     }
   }, [])
 
-  const imageSrc = product.images[0] ?? '/placeholder.svg'
+  const imageUrl = product.images?.[0] ?? UNSPLASH_FALLBACK_IMAGE
   const categoryName = product.categories?.name ?? 'Sin categoria'
 
   const handleAddToCart = () => {
@@ -48,7 +51,7 @@ export function ProductCard({ product, priority = false }: ProductCardProps) {
       name: product.name,
       slug: product.slug,
       price: product.price,
-      image: imageSrc,
+      image: imageUrl,
     })
     openCart()
 
@@ -67,7 +70,7 @@ export function ProductCard({ product, priority = false }: ProductCardProps) {
     <article className="group overflow-hidden rounded-2xl border border-[#E2DDD6] bg-[#FAFAF8] transition-all duration-300 ease-in hover:-translate-y-1 hover:shadow-[0_18px_36px_-24px_rgba(15,15,13,0.35)]">
       <div className="relative aspect-square overflow-hidden bg-[#F0EDE6]">
         <Image
-          src={imageSrc}
+          src={imageUrl}
           alt={product.name}
           fill
           priority={priority}

@@ -7,6 +7,9 @@ import { ProductDetail } from '@/modules/public/product-detail'
 
 type Params = Promise<{ slug: string }>
 
+const UNSPLASH_FALLBACK_IMAGE =
+  'https://images.unsplash.com/photo-1574258495973-f010dfbb5371?w=400&h=400&fit=crop&q=80'
+
 function buildProductDescription(description: string | null) {
   if (!description) {
     return 'Descubre monturas premium en OpticaAI y elige tu mejor estilo con asesoria personalizada.'
@@ -30,7 +33,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
 
   try {
     const product = await getProductBySlug(slug)
-    const image = product.images[0] ?? '/placeholder.svg'
+    const image = product.images?.[0] ?? UNSPLASH_FALLBACK_IMAGE
 
     return {
       title: `${product.name} · OpticaAI`,
@@ -56,6 +59,12 @@ export default async function ProductDetailRoute({ params }: { params: Params })
 
   try {
     product = await getProductBySlug(slug)
+    if (!product.images?.length) {
+      product = {
+        ...product,
+        images: [UNSPLASH_FALLBACK_IMAGE],
+      }
+    }
     relatedProducts = product.category_id
       ? await getRelatedProducts(product.id, product.category_id)
       : []
