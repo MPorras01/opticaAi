@@ -1,4 +1,3 @@
-import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import type {
   Product,
@@ -15,11 +14,7 @@ function getErrorMessage(error: unknown): string {
 }
 
 async function getReadClient() {
-  try {
-    return await createServerClient()
-  } catch {
-    return createAdminClient()
-  }
+  return createServerClient()
 }
 
 /** Retrieves active products with optional catalog filters. */
@@ -231,7 +226,7 @@ export async function getProductSlugs(): Promise<Array<{ slug: string }>> {
 /** Creates a new product using admin privileges. */
 export async function createProduct(data: ProductInsert): Promise<Product> {
   try {
-    const supabase = createAdminClient()
+    const supabase = await createServerClient()
 
     const { data: created, error } = await supabase
       .from('products')
@@ -252,7 +247,7 @@ export async function createProduct(data: ProductInsert): Promise<Product> {
 /** Updates a product by id using admin privileges. */
 export async function updateProduct(id: string, data: ProductUpdate): Promise<Product> {
   try {
-    const supabase = createAdminClient()
+    const supabase = await createServerClient()
 
     const { data: updated, error } = await supabase
       .from('products')
@@ -274,7 +269,7 @@ export async function updateProduct(id: string, data: ProductUpdate): Promise<Pr
 /** Toggles is_active state for a product using admin privileges. */
 export async function toggleProductActive(id: string): Promise<Product> {
   try {
-    const supabase = createAdminClient()
+    const supabase = await createServerClient()
 
     const { data: current, error: readError } = await supabase
       .from('products')
@@ -309,7 +304,7 @@ export async function updateProductArCalibration(
   data: Pick<ProductUpdate, 'ar_fit_profile' | 'ar_width_adjustment' | 'ar_vertical_adjustment'>
 ): Promise<Product> {
   try {
-    const supabase = createAdminClient()
+    const supabase = await createServerClient()
 
     const { data: updated, error } = await supabase
       .from('products')

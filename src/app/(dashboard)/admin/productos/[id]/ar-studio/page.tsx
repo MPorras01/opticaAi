@@ -3,7 +3,6 @@ import { redirect } from 'next/navigation'
 import { updateProductArCalibrationAction } from '@/actions/products.actions'
 import type { FitProfileKey } from '@/config/ar.config'
 import { getProductById } from '@/lib/repositories/products.repo'
-import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { ArStudio } from '@/modules/admin/ar-studio'
 
@@ -47,7 +46,7 @@ export default async function ProductArStudioPage({ params }: { params: Params }
     redirect(`/admin/productos/${id}/editar?error=Primero+sube+la+imagen+AR+del+producto`)
   }
 
-  const supabase = createAdminClient()
+  const supabase = await createServerClient()
   const { data: others } = await supabase
     .from('products')
     .select('id, name, ar_fit_profile, ar_width_adjustment, ar_vertical_adjustment')

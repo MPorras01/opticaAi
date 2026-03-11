@@ -12,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { createClient as createServerClient } from '@/lib/supabase/server'
 import { formatCOP } from '@/lib/utils/formatters'
 import { cn } from '@/lib/utils'
 import { ProductActionsMenu } from '@/modules/admin/product-actions-menu'
@@ -57,7 +57,7 @@ export default async function AdminProductsPage({ searchParams }: { searchParams
   const ar = firstParam(params.ar)
   const pageSize = 20
 
-  const supabase = createAdminClient()
+  const supabase = await createServerClient()
 
   let productsQuery = supabase
     .from('products')

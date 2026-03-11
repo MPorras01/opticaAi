@@ -11,7 +11,6 @@ import {
   toggleProductActive,
   updateProductArCalibration,
 } from '@/lib/repositories/products.repo'
-import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import type { Product, ProductFilters, ProductWithCategory } from '@/types'
 import type { FitProfileKey } from '@/config/ar.config'
@@ -36,7 +35,58 @@ type ProductMutationResult = {
 }
 
 function getErrorMessage(error: unknown): string {
+  if (
+    error &&
+    typeof error === 'object' &&
+    ('message' in error || 'details' in error || 'hint' in error || 'code' in error)
+  ) {
+    const errorRecord = error as Record<string, unknown>
+    const message = typeof errorRecord.message === 'string' ? errorRecord.message : ''
+    const details = typeof errorRecord.details === 'string' ? errorRecord.details : ''
+    const hint = typeof errorRecord.hint === 'string' ? errorRecord.hint : ''
+    const code = typeof errorRecord.code === 'string' ? errorRecord.code : ''
+
+    if (message || details || hint || code) {
+      const parts = [message, details, hint ? `Sugerencia: ${hint}` : '', code ? `Codigo: ${code}` : '']
+        .filter(Boolean)
+      return parts.join(' | ')
+    }
+  }
+
   return error instanceof Error ? error.message : 'Error desconocido'
+}
+
+function normalizeMaterial(value: FormDataEntryValue | null): string | null {
+  const raw = String(value ?? '').trim().toLowerCase()
+  if (!raw) return null
+  if (raw === 'tr90') return 'plastico'
+  return raw
+}
+
+function normalizeGender(value: FormDataEntryValue | null): string | null {
+  const raw = String(value ?? '').trim().toLowerCase()
+  if (!raw) return null
+  if (raw === 'ninos') return 'niños'
+  return raw
+}
+
+function getStorageErrorMessage(error: unknown, target: 'imagen' | 'overlay'): string {
+  const message = getErrorMessage(error)
+  const normalized = message.toLowerCase()
+
+  if (normalized.includes('row-level security')) {
+    return `No autorizado para subir ${target}. Verifica que la sesion actual sea admin y que las politicas de Storage permitan ${target === 'overlay' ? 'insertar o actualizar overlays AR' : 'subir imagenes de productos'}.`
+  }
+
+  if (normalized.includes('invalid compact jws')) {
+    return `Error de autenticacion con Supabase Storage al subir ${target}. La sesion o la clave de servicio configurada no es valida.`
+  }
+
+  if (normalized.includes('bucket')) {
+    return `No se pudo acceder al bucket de ${target === 'overlay' ? 'overlays AR' : 'imagenes de productos'}. Revisa la configuracion de Storage en Supabase.`
+  }
+
+  return message
 }
 
 function toSlug(value: string): string {
@@ -138,22 +188,22 @@ export async function uploadProductImage(file: File, productSlug: string): Promi
     throw new Error('Archivo de imagen invalido')
   }
 
-  const supabaseAdmin = createAdminClient()
+  const supabase = await createServerClient()
   const extension = getFileExtension(file)
   const safeSlug = toSlug(productSlug || 'producto')
   const fileName = `${safeSlug}-${Date.now()}.${extension}`
   const path = `products/${fileName}`
 
-  const { error } = await supabaseAdmin.storage.from('products').upload(path, file, {
+  const { error } = await supabase.storage.from('products').upload(path, file, {
     contentType: file.type || 'image/jpeg',
     upsert: false,
   })
 
   if (error) {
-    throw new Error(`No se pudo subir imagen de producto: ${error.message}`)
+    throw new Error(`No se pudo subir imagen de producto: ${getStorageErrorMessage(error, 'imagen')}`)
   }
 
-  const { data } = supabaseAdmin.storage.from('products').getPublicUrl(path)
+  const { data } = supabase.storage.from('products').getPublicUrl(path)
   return data.publicUrl
 }
 
@@ -168,20 +218,20 @@ export async function uploadArOverlay(file: File, productSlug: string): Promise<
     throw new Error('El overlay AR debe ser PNG con fondo transparente')
   }
 
-  const supabaseAdmin = createAdminClient()
+  const supabase = await createServerClient()
   const safeSlug = toSlug(productSlug || 'producto')
   const path = `${safeSlug}-ar-overlay.png`
 
-  const { error } = await supabaseAdmin.storage.from('ar-overlays').upload(path, file, {
+  const { error } = await supabase.storage.from('ar-overlays').upload(path, file, {
     contentType: 'image/png',
     upsert: true,
   })
 
   if (error) {
-    throw new Error(`No se pudo subir overlay AR: ${error.message}`)
+    throw new Error(`No se pudo subir overlay AR: ${getStorageErrorMessage(error, 'overlay')}`)
   }
 
-  const { data } = supabaseAdmin.storage.from('ar-overlays').getPublicUrl(path)
+  const { data } = supabase.storage.from('ar-overlays').getPublicUrl(path)
   return data.publicUrl
 }
 
@@ -193,11 +243,11 @@ export async function deleteProductImage(imageUrl: string): Promise<void> {
     return
   }
 
-  const supabaseAdmin = createAdminClient()
-  const { error } = await supabaseAdmin.storage.from(parsed.bucket).remove([parsed.path])
+  const supabase = await createServerClient()
+  const { error } = await supabase.storage.from(parsed.bucket).remove([parsed.path])
 
   if (error) {
-    throw new Error(`No se pudo eliminar imagen del storage: ${error.message}`)
+    throw new Error(`No se pudo eliminar imagen del storage: ${getStorageErrorMessage(error, 'imagen')}`)
   }
 }
 
@@ -206,6 +256,7 @@ export async function validateArPng(
 ): Promise<{ isValid: boolean; issues: string[]; score: number }> {
   const issues: string[] = []
   let score = 100
+  let hasBlockingIssue = false
 
   try {
     let bytes: Buffer
@@ -229,6 +280,7 @@ export async function validateArPng(
     if (!contentType.includes('png') && !url.toLowerCase().includes('.png')) {
       issues.push('El archivo no parece ser PNG')
       score -= 40
+      hasBlockingIssue = true
     }
 
     if (bytes.length < 24) {
@@ -251,20 +303,23 @@ export async function validateArPng(
     if (width < 400 || height < 160) {
       issues.push(`Dimensiones insuficientes (${width}x${height}), minimo 400x160`)
       score -= 35
+      hasBlockingIssue = true
     }
 
     if (ratio < 2 || ratio > 3) {
-      issues.push(`Proporcion fuera de rango (${ratio.toFixed(2)}), recomendado entre 2:1 y 3:1`)
+      issues.push(
+        `Proporcion fuera de rango (${ratio.toFixed(2)}). Se puede guardar, pero se recomienda entre 2:1 y 3:1 para mejor ajuste AR.`
+      )
       score -= 20
     }
 
     if (!hasAlpha) {
       issues.push('No se detecta canal alpha/transparencia en el PNG')
       score -= 25
+      hasBlockingIssue = true
     }
 
-    const isValid = issues.length === 0
-    return { isValid, issues, score: Math.max(0, score) }
+    return { isValid: !hasBlockingIssue, issues, score: Math.max(0, score) }
   } catch (error) {
     return {
       isValid: false,
@@ -277,7 +332,7 @@ export async function validateArPng(
 export async function createProductAction(formData: FormData): Promise<ProductMutationResult> {
   try {
     await ensureAdminUser()
-    const supabaseAdmin = createAdminClient()
+    const supabase = await createServerClient()
 
     const name = String(formData.get('name') ?? '').trim()
     if (!name) {
@@ -314,9 +369,9 @@ export async function createProductAction(formData: FormData): Promise<ProductMu
       stock: parseNumeric(formData.get('stock'), 0),
       brand: String(formData.get('brand') ?? '').trim() || null,
       color: String(formData.get('color') ?? '').trim() || null,
-      material: String(formData.get('material') ?? '').trim() || null,
+      material: normalizeMaterial(formData.get('material')),
       frame_shape: String(formData.get('frame_shape') ?? '').trim() || null,
-      gender: String(formData.get('gender') ?? '').trim() || null,
+      gender: normalizeGender(formData.get('gender')),
       is_active: parseBoolean(formData.get('is_active'), true),
       has_ar_overlay: parseBoolean(formData.get('has_ar_overlay'), Boolean(arOverlayUrl)),
       images: imageUrls,
@@ -328,7 +383,7 @@ export async function createProductAction(formData: FormData): Promise<ProductMu
       ar_vertical_adjustment: parseNumeric(formData.get('ar_vertical_adjustment'), 0),
     }
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await supabase
       .from('products')
       .insert(payload)
       .select('id, slug')
@@ -357,7 +412,7 @@ export async function updateProductAction(
 ): Promise<ProductMutationResult> {
   try {
     await ensureAdminUser()
-    const supabaseAdmin = createAdminClient()
+    const supabase = await createServerClient()
 
     const currentProduct = await getProductById(id)
     const name = String(formData.get('name') ?? currentProduct.name).trim()
@@ -403,10 +458,10 @@ export async function updateProductAction(
       stock: parseNumeric(formData.get('stock'), Number(currentProduct.stock ?? 0)),
       brand: String(formData.get('brand') ?? currentProduct.brand ?? '').trim() || null,
       color: String(formData.get('color') ?? currentProduct.color ?? '').trim() || null,
-      material: String(formData.get('material') ?? currentProduct.material ?? '').trim() || null,
+      material: normalizeMaterial(formData.get('material') ?? currentProduct.material ?? ''),
       frame_shape:
         String(formData.get('frame_shape') ?? currentProduct.frame_shape ?? '').trim() || null,
-      gender: String(formData.get('gender') ?? currentProduct.gender ?? '').trim() || null,
+      gender: normalizeGender(formData.get('gender') ?? currentProduct.gender ?? ''),
       is_active: parseBoolean(formData.get('is_active'), Boolean(currentProduct.is_active)),
       has_ar_overlay: parseBoolean(
         formData.get('has_ar_overlay'),
@@ -427,7 +482,7 @@ export async function updateProductAction(
       ),
     }
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await supabase
       .from('products')
       .update(payload)
       .eq('id', id)
@@ -455,7 +510,7 @@ export async function updateProductAction(
 export async function deleteProductAction(id: string): Promise<ActionResult<null>> {
   try {
     await ensureAdminUser()
-    const supabaseAdmin = createAdminClient()
+    const supabase = await createServerClient()
 
     const currentProduct = await getProductById(id)
 
@@ -466,14 +521,14 @@ export async function deleteProductAction(id: string): Promise<ActionResult<null
     if (currentProduct.ar_overlay_url) {
       const parsed = storagePathFromPublicUrl(currentProduct.ar_overlay_url)
       if (parsed) {
-        const { error } = await supabaseAdmin.storage.from(parsed.bucket).remove([parsed.path])
+        const { error } = await supabase.storage.from(parsed.bucket).remove([parsed.path])
         if (error) {
-          throw new Error(`No se pudo eliminar overlay AR: ${error.message}`)
+          throw new Error(`No se pudo eliminar overlay AR: ${getStorageErrorMessage(error, 'overlay')}`)
         }
       }
     }
 
-    const { error } = await supabaseAdmin.from('products').update({ is_active: false }).eq('id', id)
+    const { error } = await supabase.from('products').update({ is_active: false }).eq('id', id)
 
     if (error) {
       throw error

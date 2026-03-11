@@ -5,7 +5,6 @@ import { useEffect, useRef } from 'react'
 import {
   AR_SETTINGS,
   DEBUG_MODE,
-  GLASSES_FIT_PROFILES,
   LANDMARK_INDICES,
   angleBetween,
   distance,
@@ -13,6 +12,7 @@ import {
   type GlassesFitProfile,
 } from '@/config/ar.config'
 import type { NormalizedLandmarkList } from '@/hooks/useFaceDetection'
+import { getCachedProcessedPng } from '@/lib/ar/png-processor'
 import type { ProductWithCategory } from '@/types'
 
 type GlassesOverlayProps = {
@@ -26,6 +26,9 @@ type GlassesOverlayProps = {
   forceDebug?: boolean
 }
 
+const LEFT_IRIS_CENTER_INDEX = 468
+const RIGHT_IRIS_CENTER_INDEX = 473
+
 export function GlassesOverlay({
   canvasRef,
   videoRef,
@@ -36,28 +39,7 @@ export function GlassesOverlay({
   isFlipped = true,
   forceDebug = false,
 }: GlassesOverlayProps) {
-  const imageCache = useRef<Map<string, HTMLImageElement>>(new Map())
   const renderPending = useRef(false)
-
-  const getGlassesImage = async (url: string): Promise<HTMLImageElement> => {
-    const cached = imageCache.current.get(url)
-    if (cached) {
-      return cached
-    }
-
-    return new Promise((resolve, reject) => {
-      const img = new Image()
-      img.crossOrigin = 'anonymous'
-      img.onload = () => {
-        imageCache.current.set(url, img)
-        resolve(img)
-      }
-      img.onerror = () => {
-        reject(new Error(`No se pudo cargar overlay: ${url}`))
-      }
-      img.src = url
-    })
-  }
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -83,8 +65,12 @@ export function GlassesOverlay({
 
       const W = video.videoWidth || AR_SETTINGS.videoWidth
       const H = video.videoHeight || AR_SETTINGS.videoHeight
-      canvas.width = W
-      canvas.height = H
+      const dpr = Math.min(window.devicePixelRatio || 1, 2)
+      canvas.width = Math.round(W * dpr)
+      canvas.height = Math.round(H * dpr)
+      canvas.style.width = `${W}px`
+      canvas.style.height = `${H}px`
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
       ctx.clearRect(0, 0, W, H)
 
       if (!landmarks || landmarks.length === 0) {
@@ -99,10 +85,9 @@ export function GlassesOverlay({
       }
 
       const needed = [
-        LANDMARK_INDICES.LEFT_EYE_OUTER,
-        LANDMARK_INDICES.RIGHT_EYE_OUTER,
         LANDMARK_INDICES.LEFT_EYEBROW_INNER,
         LANDMARK_INDICES.RIGHT_EYEBROW_INNER,
+        LANDMARK_INDICES.NOSE_BRIDGE_TOP,
       ]
 
       const hasRequiredPoints = needed.every((idx) => landmarks[idx])
@@ -112,24 +97,37 @@ export function GlassesOverlay({
 
       const leftEyeOuter = toPixels(landmarks[LANDMARK_INDICES.LEFT_EYE_OUTER], W, H)
       const rightEyeOuter = toPixels(landmarks[LANDMARK_INDICES.RIGHT_EYE_OUTER], W, H)
+      const leftIrisLm = landmarks[LEFT_IRIS_CENTER_INDEX]
+      const rightIrisLm = landmarks[RIGHT_IRIS_CENTER_INDEX]
+      const leftIris = leftIrisLm ? toPixels(leftIrisLm, W, H) : leftEyeOuter
+      const rightIris = rightIrisLm ? toPixels(rightIrisLm, W, H) : rightEyeOuter
       const leftEyebrowInner = toPixels(landmarks[LANDMARK_INDICES.LEFT_EYEBROW_INNER], W, H)
       const rightEyebrowInner = toPixels(landmarks[LANDMARK_INDICES.RIGHT_EYEBROW_INNER], W, H)
+      const noseBridge = landmarks[LANDMARK_INDICES.NOSE_BRIDGE_TOP]
+      const noseBridgeZ = typeof noseBridge?.z === 'number' ? noseBridge.z : 0
 
-      const eyeDistance = distance(leftEyeOuter, rightEyeOuter)
-      const glassesWidth = eyeDistance * 2.4
+      const irisDistance = distance(leftIris, rightIris)
+      const depthScale = 1 + noseBridgeZ * -0.3
+      const clampedDepthScale = Math.max(0.75, Math.min(1.35, depthScale))
 
-      const centerX = (leftEyeOuter.x + rightEyeOuter.x) / 2
+      const glassesWidth = irisDistance * 2.8 * fitProfile.widthFactor
+      const finalWidth = glassesWidth * clampedDepthScale
 
-      const eyeCenterY = (leftEyeOuter.y + rightEyeOuter.y) / 2
+      const centerX = (leftIris.x + rightIris.x) / 2
+
+      const eyeCenterY = (leftIris.y + rightIris.y) / 2
       const browCenterY = (leftEyebrowInner.y + rightEyebrowInner.y) / 2
-      const centerY = browCenterY + (eyeCenterY - browCenterY) * 0.3
+      const centerY =
+        browCenterY +
+        (eyeCenterY - browCenterY) * (0.3 + fitProfile.bridgeOffset) +
+        H * fitProfile.verticalOffset
 
-      const glassesHeight = glassesWidth * 0.38
-      const angle = angleBetween(leftEyeOuter, rightEyeOuter)
+      const finalHeight = finalWidth * fitProfile.heightFactor
+      const angle = angleBetween(leftIris, rightIris)
 
-      let glassesImg: HTMLImageElement
+      let processedPng: HTMLCanvasElement
       try {
-        glassesImg = await getGlassesImage(glassesImageUrl)
+        processedPng = await getCachedProcessedPng(glassesImageUrl)
       } catch {
         return
       }
@@ -144,43 +142,16 @@ export function GlassesOverlay({
       }
       ctx.rotate(angle)
 
-      const drawWidth = Math.max(1, Math.round(glassesWidth))
-      const drawHeight = Math.max(1, Math.round(glassesHeight))
+      const drawWidth = Math.max(1, Math.round(finalWidth))
+      const drawHeight = Math.max(1, Math.round(finalHeight))
 
-      const offscreen = document.createElement('canvas')
-      offscreen.width = drawWidth
-      offscreen.height = drawHeight
-      const offCtx = offscreen.getContext('2d')
+      ctx.save()
+      ctx.shadowColor = 'rgba(0,0,0,0.35)'
+      ctx.shadowBlur = 8 + Math.abs(noseBridgeZ) * 20
+      ctx.shadowOffsetY = 3 + Math.abs(noseBridgeZ) * 8
+      ctx.drawImage(processedPng, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight)
+      ctx.restore()
 
-      if (offCtx) {
-        offCtx.drawImage(glassesImg, 0, 0, drawWidth, drawHeight)
-        const imageData = offCtx.getImageData(0, 0, drawWidth, drawHeight)
-        const data = imageData.data
-
-        for (let i = 0; i < data.length; i += 4) {
-          const r = data[i]
-          const g = data[i + 1]
-          const b = data[i + 2]
-          const brightness = (r + g + b) / 3
-
-          if (brightness > 230) {
-            data[i + 3] = 0
-          } else if (brightness > 200) {
-            data[i + 3] = Math.round((255 - brightness) * 2.5)
-          }
-        }
-
-        offCtx.putImageData(imageData, 0, 0)
-        ctx.drawImage(offscreen, -glassesWidth / 2, -glassesHeight / 2, glassesWidth, glassesHeight)
-      } else {
-        ctx.drawImage(
-          glassesImg,
-          -glassesWidth / 2,
-          -glassesHeight / 2,
-          glassesWidth,
-          glassesHeight
-        )
-      }
       ctx.restore()
 
       if (DEBUG_MODE || forceDebug) {
@@ -189,6 +160,8 @@ export function GlassesOverlay({
           { lm: landmarks[454], color: '#ff0000', label: 'R-temple' },
           { lm: landmarks[33], color: '#00ff00', label: 'L-eye' },
           { lm: landmarks[263], color: '#00ff00', label: 'R-eye' },
+          { lm: landmarks[LEFT_IRIS_CENTER_INDEX], color: '#00ffff', label: 'L-iris' },
+          { lm: landmarks[RIGHT_IRIS_CENTER_INDEX], color: '#00ffff', label: 'R-iris' },
           { lm: landmarks[107], color: '#0000ff', label: 'L-brow' },
           { lm: landmarks[336], color: '#0000ff', label: 'R-brow' },
           { lm: landmarks[6], color: '#ffff00', label: 'bridge' },

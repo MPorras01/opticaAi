@@ -1,4 +1,3 @@
-import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import type { CreateOrderInput, Order, OrderItem, OrderStatus, OrderWithItems } from '@/types'
 
@@ -76,7 +75,7 @@ export async function createOrder(
   } catch (error) {
     if (createdOrderId) {
       try {
-        const admin = createAdminClient()
+        const admin = await createServerClient()
         await admin.from('orders').delete().eq('id', createdOrderId)
       } catch {
         // Best-effort rollback if item insertion fails.
@@ -138,7 +137,7 @@ export async function getOrdersByCustomer(customerId: string): Promise<OrderWith
 /** Updates the status of an order with admin privileges. */
 export async function updateOrderStatus(orderId: string, status: OrderStatus): Promise<Order> {
   try {
-    const supabase = createAdminClient()
+    const supabase = await createServerClient()
 
     const { data, error } = await supabase
       .from('orders')
@@ -163,7 +162,7 @@ export async function updateOrderPayment(
   wompiData: WompiUpdateInput
 ): Promise<Order> {
   try {
-    const supabase = createAdminClient()
+    const supabase = await createServerClient()
 
     const normalizedStatus = wompiData.status.toLowerCase()
     const mappedOrderStatus: OrderStatus = normalizedStatus === 'approved' ? 'confirmed' : 'pending'
@@ -193,7 +192,7 @@ export async function updateOrderPayment(
 /** Retrieves all orders with optional status filter using admin privileges. */
 export async function getAllOrders(status?: OrderStatus): Promise<Order[]> {
   try {
-    const supabase = createAdminClient()
+    const supabase = await createServerClient()
 
     let query = supabase
       .from('orders')
@@ -221,7 +220,7 @@ export async function getAllOrders(status?: OrderStatus): Promise<Order[]> {
 /** Calculates high-level order stats for admin dashboards. */
 export async function getOrderStats(): Promise<OrderStats> {
   try {
-    const supabase = createAdminClient()
+    const supabase = await createServerClient()
 
     const now = new Date()
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString()

@@ -4,16 +4,11 @@ import { NextResponse, type NextRequest } from 'next/server'
 import type { Database } from '@/types/database.types'
 
 const protectedPrefixes = ['/admin', '/cuenta']
-const authRoutes = ['/login', '/registro']
 
 function isProtectedPath(pathname: string): boolean {
   return protectedPrefixes.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
   )
-}
-
-function isAuthPath(pathname: string): boolean {
-  return authRoutes.includes(pathname)
 }
 
 function applySupabaseCookies(target: NextResponse, source: NextResponse): NextResponse {
@@ -66,14 +61,6 @@ export async function middleware(request: NextRequest) {
     const redirectUrl = request.nextUrl.clone()
     redirectUrl.pathname = '/login'
     redirectUrl.searchParams.set('redirectTo', pathname)
-
-    return applySupabaseCookies(NextResponse.redirect(redirectUrl), supabaseResponse)
-  }
-
-  if (user && isAuthPath(pathname)) {
-    const redirectUrl = request.nextUrl.clone()
-    redirectUrl.pathname = '/'
-    redirectUrl.search = ''
 
     return applySupabaseCookies(NextResponse.redirect(redirectUrl), supabaseResponse)
   }

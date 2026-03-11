@@ -1,4 +1,3 @@
-import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import type { Category, CategoryInsert, CategoryUpdate } from '@/types'
 
@@ -7,11 +6,7 @@ function getErrorMessage(error: unknown): string {
 }
 
 async function getReadClient() {
-  try {
-    return await createServerClient()
-  } catch {
-    return createAdminClient()
-  }
+  return createServerClient()
 }
 
 /** Retrieves all active categories ordered by name. */
@@ -67,7 +62,7 @@ export async function getCategoryBySlug(slug: string): Promise<Category> {
 /** Creates a category with admin privileges. */
 export async function createCategory(data: CategoryInsert): Promise<Category> {
   try {
-    const supabase = createAdminClient()
+    const supabase = await createServerClient()
 
     const { data: created, error } = await supabase
       .from('categories')
@@ -88,7 +83,7 @@ export async function createCategory(data: CategoryInsert): Promise<Category> {
 /** Updates a category with admin privileges. */
 export async function updateCategory(id: string, data: CategoryUpdate): Promise<Category> {
   try {
-    const supabase = createAdminClient()
+    const supabase = await createServerClient()
 
     const { data: updated, error } = await supabase
       .from('categories')

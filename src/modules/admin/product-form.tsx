@@ -54,7 +54,7 @@ const playfairDisplay = Playfair_Display({
   weight: ['500', '600', '700'],
 })
 
-const materialOptions = ['acetato', 'metal', 'titanio', 'tr90', 'mixto'] as const
+const materialOptions = ['acetato', 'metal', 'titanio', 'plastico', 'mixto'] as const
 const frameShapeOptions = [
   'rectangular',
   'redonda',
@@ -64,8 +64,23 @@ const frameShapeOptions = [
   'ovalada',
   'hexagonal',
 ] as const
-const genderOptions = ['hombre', 'mujer', 'unisex', 'ninos'] as const
+const genderOptions = ['hombre', 'mujer', 'unisex', 'niños'] as const
 const fitProfileOptions = ['FULL_FRAME', 'SEMI_RIMLESS', 'RIMLESS', 'OVERSIZED', 'SPORTS'] as const
+
+const materialLabels: Record<(typeof materialOptions)[number], string> = {
+  acetato: 'acetato',
+  metal: 'metal',
+  titanio: 'titanio',
+  plastico: 'TR90 / plastico',
+  mixto: 'mixto',
+}
+
+const genderLabels: Record<(typeof genderOptions)[number], string> = {
+  hombre: 'hombre',
+  mujer: 'mujer',
+  unisex: 'unisex',
+  niños: 'niños',
+}
 
 const ProductFormSchema = z.object({
   name: z.string().min(3).max(100),
@@ -228,6 +243,7 @@ export function ProductForm({ product, categories }: ProductFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [mode, setMode] = useState<'draft' | 'publish'>('publish')
+  const modeRef = useRef<'draft' | 'publish'>('publish')
   const [slugLocked, setSlugLocked] = useState(false)
   const [images, setImages] = useState<FilePreview[]>([])
   const [dragIndex, setDragIndex] = useState<number | null>(null)
@@ -378,7 +394,7 @@ export function ProductForm({ product, categories }: ProductFormProps) {
       fd.set('frame_shape', values.frame_shape ?? '')
       fd.set('gender', values.gender ?? '')
       fd.set('category_id', values.category_id)
-      fd.set('is_active', mode === 'publish' ? 'true' : 'false')
+      fd.set('is_active', modeRef.current === 'publish' ? 'true' : 'false')
       fd.set('has_ar_overlay', values.has_ar_overlay ? 'true' : 'false')
       fd.set('ar_fit_profile', values.ar_fit_profile)
       fd.set('meta_title', values.meta_title ?? '')
@@ -398,14 +414,24 @@ export function ProductForm({ product, categories }: ProductFormProps) {
       }
 
       if (!product) window.localStorage.removeItem(draftKey)
-      toast.success(mode === 'publish' ? 'Producto publicado' : 'Borrador guardado')
+      toast.success(modeRef.current === 'publish' ? 'Producto publicado' : 'Borrador guardado')
       router.push('/admin/productos')
       router.refresh()
     })
   }
 
   return (
-    <form className="space-y-5" onSubmit={form.handleSubmit(onSubmit)}>
+    <form
+      className="space-y-5"
+      onSubmit={form.handleSubmit(onSubmit, (errors) => {
+        const firstError = Object.values(errors)[0]
+        toast.error(
+          firstError?.message
+            ? `Revisa el formulario: ${firstError.message}`
+            : 'Revisa los campos obligatorios antes de guardar'
+        )
+      })}
+    >
       <Tabs defaultValue="basica">
         <TabsList variant="line" className="border-b border-[#E8E2D8] p-0">
           <TabsTrigger value="basica" className="rounded-none px-4 py-2.5 text-sm">
@@ -429,6 +455,9 @@ export function ProductForm({ product, categories }: ProductFormProps) {
           <div className="space-y-2">
             <Label>Nombre del producto</Label>
             <Input {...form.register('name')} />
+            {form.formState.errors.name && (
+              <p className="text-xs text-red-600">{form.formState.errors.name.message}</p>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -449,6 +478,9 @@ export function ProductForm({ product, categories }: ProductFormProps) {
               <span className="text-xs text-[#6F6A61]">{description.length}/1000</span>
             </div>
             <Textarea rows={4} {...form.register('description')} />
+            {form.formState.errors.description && (
+              <p className="text-xs text-red-600">{form.formState.errors.description.message}</p>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -470,6 +502,9 @@ export function ProductForm({ product, categories }: ProductFormProps) {
                 ))}
               </SelectContent>
             </Select>
+            {form.formState.errors.category_id && (
+              <p className="text-xs text-red-600">Selecciona una categoria</p>
+            )}
           </div>
 
           <div className="grid gap-4 md:grid-cols-3">
@@ -499,7 +534,7 @@ export function ProductForm({ product, categories }: ProductFormProps) {
                   <SelectItem value="none">Sin definir</SelectItem>
                   {materialOptions.map((item) => (
                     <SelectItem key={item} value={item}>
-                      {item}
+                      {materialLabels[item]}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -551,7 +586,7 @@ export function ProductForm({ product, categories }: ProductFormProps) {
                   <SelectItem value="none">Sin definir</SelectItem>
                   {genderOptions.map((item) => (
                     <SelectItem key={item} value={item}>
-                      {item}
+                      {genderLabels[item]}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -570,6 +605,9 @@ export function ProductForm({ product, categories }: ProductFormProps) {
                   setPriceInput(formatCurrencyInput(num))
                 }}
               />
+              {form.formState.errors.price && (
+                <p className="text-xs text-red-600">El precio minimo es $1.000 COP</p>
+              )}
             </div>
             <div className="space-y-2">
               <Label>Precio comparacion COP</Label>
@@ -924,7 +962,7 @@ export function ProductForm({ product, categories }: ProductFormProps) {
             type="submit"
             variant="outline"
             disabled={isPending}
-            onClick={() => setMode('draft')}
+            onClick={() => { modeRef.current = 'draft'; setMode('draft') }}
           >
             Guardar borrador
           </Button>
@@ -932,7 +970,7 @@ export function ProductForm({ product, categories }: ProductFormProps) {
           <Button
             type="submit"
             disabled={isPending}
-            onClick={() => setMode('publish')}
+            onClick={() => { modeRef.current = 'publish'; setMode('publish') }}
             className="bg-[#D4A853] text-black hover:bg-[#C79D4C]"
           >
             {isPending ? (
