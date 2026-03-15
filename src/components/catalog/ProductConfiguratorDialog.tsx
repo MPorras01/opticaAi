@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { DM_Sans, Playfair_Display } from 'next/font/google'
 import { toast } from 'sonner'
 
+import { uploadPrescriptionImageAction } from '@/actions/orders.actions'
 import {
   Dialog,
   DialogContent,
@@ -80,6 +81,7 @@ export function ProductConfiguratorDialog({
   const [lensType, setLensType] = useState<LensType>('sin-lente')
   const [lensFilters, setLensFilters] = useState<LensFilterOption[]>([])
   const [prescription, setPrescription] = useState<PrescriptionData>(createEmptyPrescription())
+  const [isUploadingPrescription, setIsUploadingPrescription] = useState(false)
 
   function toggleFilter(filter: LensFilterOption, checked: boolean) {
     setLensFilters((current) =>
@@ -116,19 +118,30 @@ export function ProductConfiguratorDialog({
       }
     }
 
-    const nextPrescription: PrescriptionData | null =
-      !shouldCapturePrescription
-        ? null
-        : prescription.mode === 'manual'
-          ? {
-              ...prescription,
-              legalAcceptedAt: prescription.legalConsent ? new Date().toISOString() : null,
-            }
-          : {
-              ...createEmptyPrescription(),
-              mode: 'pending',
-              notes: prescription.notes?.trim() || undefined,
-            }
+    if (shouldCapturePrescription && prescription.mode === 'upload') {
+      if (!prescription.imagePath) {
+        toast.error('Adjunta la imagen de la fórmula o selecciona otra opción')
+        return
+      }
+
+      if (!prescription.legalConsent) {
+        toast.error('Debes autorizar el tratamiento y almacenamiento de la fórmula')
+        return
+      }
+    }
+
+    const nextPrescription: PrescriptionData | null = !shouldCapturePrescription
+      ? null
+      : prescription.mode === 'manual' || prescription.mode === 'upload'
+        ? {
+            ...prescription,
+            legalAcceptedAt: prescription.legalConsent ? new Date().toISOString() : null,
+          }
+        : {
+            ...createEmptyPrescription(),
+            mode: 'pending',
+            notes: prescription.notes?.trim() || undefined,
+          }
 
     addItem({
       id: product.id,
@@ -144,6 +157,29 @@ export function ProductConfiguratorDialog({
     toast.success('Producto agregado con configuración personalizada')
     setOpen(false)
     openCart()
+  }
+
+  async function handlePrescriptionUpload(file: File | null) {
+    if (!file) {
+      return
+    }
+
+    setIsUploadingPrescription(true)
+    const result = await uploadPrescriptionImageAction(file, product.slug)
+
+    if (result.success && result.data) {
+      setPrescription((current) => ({
+        ...current,
+        mode: 'upload',
+        imagePath: result.data?.path,
+        imageFileName: result.data?.fileName,
+      }))
+      toast.success('Fórmula cargada correctamente')
+    } else {
+      toast.error(result.error ?? 'No se pudo cargar la fórmula')
+    }
+
+    setIsUploadingPrescription(false)
   }
 
   return (
@@ -171,7 +207,13 @@ export function ProductConfiguratorDialog({
                     onClick={() => setSelectedImage(image)}
                     className="relative h-20 w-20 shrink-0 overflow-hidden rounded-2xl border border-[#DCCFB9] bg-white"
                   >
-                    <Image src={image} alt={product.name} fill className="object-cover" sizes="80px" />
+                    <Image
+                      src={image}
+                      alt={product.name}
+                      fill
+                      className="object-cover"
+                      sizes="80px"
+                    />
                     <span
                       className={`absolute inset-0 border-2 ${selectedImage === image ? 'border-[#D4A853]' : 'border-transparent'}`}
                     />
@@ -183,17 +225,28 @@ export function ProductConfiguratorDialog({
 
           <section className="p-5 lg:p-6">
             <DialogHeader className="space-y-3">
-              <p className={dmSans.className + ' text-[11px] font-medium tracking-[0.16em] text-[#8A6A2F] uppercase'}>
+              <p
+                className={
+                  dmSans.className +
+                  ' text-[11px] font-medium tracking-[0.16em] text-[#8A6A2F] uppercase'
+                }
+              >
                 Configurador de compra
               </p>
-              <DialogTitle className={playfairDisplay.className + ' text-4xl font-semibold text-[#0F0F0D]'}>
+              <DialogTitle
+                className={playfairDisplay.className + ' text-4xl font-semibold text-[#0F0F0D]'}
+              >
                 {product.name}
               </DialogTitle>
               <DialogDescription className={dmSans.className + ' text-sm leading-7 text-[#66665F]'}>
                 Elige el tipo de lente, agrega filtros y registra la fórmula si ya la tienes. La
                 información queda asociada al pedido para soporte posterior.
               </DialogDescription>
-              <div className={playfairDisplay.className + ' text-3xl font-semibold italic text-[#0F0F0D]'}>
+              <div
+                className={
+                  playfairDisplay.className + ' text-3xl font-semibold text-[#0F0F0D] italic'
+                }
+              >
                 {formatCOP(product.price)}
               </div>
             </DialogHeader>
@@ -251,7 +304,9 @@ export function ProductConfiguratorDialog({
                       <div className="flex flex-wrap gap-2">
                         <button
                           type="button"
-                          onClick={() => setPrescription((current) => ({ ...current, mode: 'manual' }))}
+                          onClick={() =>
+                            setPrescription((current) => ({ ...current, mode: 'manual' }))
+                          }
                           className={`rounded-full px-4 py-2 text-sm transition ${
                             prescription.mode === 'manual'
                               ? 'bg-[#0F0F0D] text-[#FAFAF8]'
@@ -259,6 +314,19 @@ export function ProductConfiguratorDialog({
                           }`}
                         >
                           Ingresar fórmula ahora
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setPrescription((current) => ({ ...current, mode: 'upload' }))
+                          }
+                          className={`rounded-full px-4 py-2 text-sm transition ${
+                            prescription.mode === 'upload'
+                              ? 'bg-[#0F0F0D] text-[#FAFAF8]'
+                              : 'bg-[#F3EFE7] text-[#3E3E38]'
+                          }`}
+                        >
+                          Subir fórmula
                         </button>
                         <button
                           type="button"
@@ -285,34 +353,48 @@ export function ProductConfiguratorDialog({
                       <div className="space-y-4">
                         <div className="grid gap-4 md:grid-cols-2">
                           <div className="space-y-3 rounded-2xl border border-[#ECE5D8] bg-[#FCFBF8] p-4">
-                            <p className={dmSans.className + ' text-sm font-semibold text-[#0F0F0D]'}>
+                            <p
+                              className={dmSans.className + ' text-sm font-semibold text-[#0F0F0D]'}
+                            >
                               Ojo derecho (OD)
                             </p>
                             <div className="grid gap-3 sm:grid-cols-3">
                               <div className="space-y-1.5">
-                                <Label htmlFor="od-sphere" className={dmSans.className}>Esfera</Label>
+                                <Label htmlFor="od-sphere" className={dmSans.className}>
+                                  Esfera
+                                </Label>
                                 <Input
                                   id="od-sphere"
                                   value={prescription.rightEye.sphere ?? ''}
-                                  onChange={(event) => updatePrescription('rightEye', 'sphere', event.target.value)}
+                                  onChange={(event) =>
+                                    updatePrescription('rightEye', 'sphere', event.target.value)
+                                  }
                                   placeholder="-1.25"
                                 />
                               </div>
                               <div className="space-y-1.5">
-                                <Label htmlFor="od-cylinder" className={dmSans.className}>Cilindro</Label>
+                                <Label htmlFor="od-cylinder" className={dmSans.className}>
+                                  Cilindro
+                                </Label>
                                 <Input
                                   id="od-cylinder"
                                   value={prescription.rightEye.cylinder ?? ''}
-                                  onChange={(event) => updatePrescription('rightEye', 'cylinder', event.target.value)}
+                                  onChange={(event) =>
+                                    updatePrescription('rightEye', 'cylinder', event.target.value)
+                                  }
                                   placeholder="-0.50"
                                 />
                               </div>
                               <div className="space-y-1.5">
-                                <Label htmlFor="od-axis" className={dmSans.className}>Eje</Label>
+                                <Label htmlFor="od-axis" className={dmSans.className}>
+                                  Eje
+                                </Label>
                                 <Input
                                   id="od-axis"
                                   value={prescription.rightEye.axis ?? ''}
-                                  onChange={(event) => updatePrescription('rightEye', 'axis', event.target.value)}
+                                  onChange={(event) =>
+                                    updatePrescription('rightEye', 'axis', event.target.value)
+                                  }
                                   placeholder="90"
                                 />
                               </div>
@@ -320,34 +402,48 @@ export function ProductConfiguratorDialog({
                           </div>
 
                           <div className="space-y-3 rounded-2xl border border-[#ECE5D8] bg-[#FCFBF8] p-4">
-                            <p className={dmSans.className + ' text-sm font-semibold text-[#0F0F0D]'}>
+                            <p
+                              className={dmSans.className + ' text-sm font-semibold text-[#0F0F0D]'}
+                            >
                               Ojo izquierdo (OI)
                             </p>
                             <div className="grid gap-3 sm:grid-cols-3">
                               <div className="space-y-1.5">
-                                <Label htmlFor="oi-sphere" className={dmSans.className}>Esfera</Label>
+                                <Label htmlFor="oi-sphere" className={dmSans.className}>
+                                  Esfera
+                                </Label>
                                 <Input
                                   id="oi-sphere"
                                   value={prescription.leftEye.sphere ?? ''}
-                                  onChange={(event) => updatePrescription('leftEye', 'sphere', event.target.value)}
+                                  onChange={(event) =>
+                                    updatePrescription('leftEye', 'sphere', event.target.value)
+                                  }
                                   placeholder="-1.00"
                                 />
                               </div>
                               <div className="space-y-1.5">
-                                <Label htmlFor="oi-cylinder" className={dmSans.className}>Cilindro</Label>
+                                <Label htmlFor="oi-cylinder" className={dmSans.className}>
+                                  Cilindro
+                                </Label>
                                 <Input
                                   id="oi-cylinder"
                                   value={prescription.leftEye.cylinder ?? ''}
-                                  onChange={(event) => updatePrescription('leftEye', 'cylinder', event.target.value)}
+                                  onChange={(event) =>
+                                    updatePrescription('leftEye', 'cylinder', event.target.value)
+                                  }
                                   placeholder="-0.25"
                                 />
                               </div>
                               <div className="space-y-1.5">
-                                <Label htmlFor="oi-axis" className={dmSans.className}>Eje</Label>
+                                <Label htmlFor="oi-axis" className={dmSans.className}>
+                                  Eje
+                                </Label>
                                 <Input
                                   id="oi-axis"
                                   value={prescription.leftEye.axis ?? ''}
-                                  onChange={(event) => updatePrescription('leftEye', 'axis', event.target.value)}
+                                  onChange={(event) =>
+                                    updatePrescription('leftEye', 'axis', event.target.value)
+                                  }
                                   placeholder="80"
                                 />
                               </div>
@@ -357,32 +453,53 @@ export function ProductConfiguratorDialog({
 
                         <div className="grid gap-3 sm:grid-cols-2">
                           <div className="space-y-1.5">
-                            <Label htmlFor="pd" className={dmSans.className}>Distancia pupilar (PD)</Label>
+                            <Label htmlFor="pd" className={dmSans.className}>
+                              Distancia pupilar (PD)
+                            </Label>
                             <Input
                               id="pd"
                               value={prescription.pd ?? ''}
-                              onChange={(event) => setPrescription((current) => ({ ...current, pd: event.target.value }))}
+                              onChange={(event) =>
+                                setPrescription((current) => ({
+                                  ...current,
+                                  pd: event.target.value,
+                                }))
+                              }
                               placeholder="62"
                             />
                           </div>
                           <div className="space-y-1.5">
-                            <Label htmlFor="add-power" className={dmSans.className}>Adición</Label>
+                            <Label htmlFor="add-power" className={dmSans.className}>
+                              Adición
+                            </Label>
                             <Input
                               id="add-power"
                               value={prescription.addPower ?? ''}
-                              onChange={(event) => setPrescription((current) => ({ ...current, addPower: event.target.value }))}
+                              onChange={(event) =>
+                                setPrescription((current) => ({
+                                  ...current,
+                                  addPower: event.target.value,
+                                }))
+                              }
                               placeholder="+1.50"
                             />
                           </div>
                         </div>
 
                         <div className="space-y-1.5">
-                          <Label htmlFor="prescription-notes" className={dmSans.className}>Notas adicionales</Label>
+                          <Label htmlFor="prescription-notes" className={dmSans.className}>
+                            Notas adicionales
+                          </Label>
                           <Textarea
                             id="prescription-notes"
                             rows={3}
                             value={prescription.notes ?? ''}
-                            onChange={(event) => setPrescription((current) => ({ ...current, notes: event.target.value }))}
+                            onChange={(event) =>
+                              setPrescription((current) => ({
+                                ...current,
+                                notes: event.target.value,
+                              }))
+                            }
                             placeholder="Ej. uso permanente, trabajar frente a pantallas, preferencia de delgadez, etc."
                           />
                         </div>
@@ -391,12 +508,88 @@ export function ProductConfiguratorDialog({
                           <Checkbox
                             checked={prescription.legalConsent}
                             onCheckedChange={(checked) =>
-                              setPrescription((current) => ({ ...current, legalConsent: Boolean(checked) }))
+                              setPrescription((current) => ({
+                                ...current,
+                                legalConsent: Boolean(checked),
+                              }))
                             }
                           />
                           <span className={dmSans.className}>
                             Autorizo a OpticaAI a almacenar y tratar mi fórmula oftálmica para la
                             gestión de este pedido y soporte posterior.
+                          </span>
+                        </label>
+                      </div>
+                    ) : prescription.mode === 'upload' ? (
+                      <div className="space-y-4">
+                        <div className="space-y-1.5">
+                          <Label htmlFor="prescription-upload" className={dmSans.className}>
+                            Imagen de la fórmula
+                          </Label>
+                          <Input
+                            id="prescription-upload"
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp"
+                            onChange={(event) => {
+                              const file = event.target.files?.[0] ?? null
+                              void handlePrescriptionUpload(file)
+                            }}
+                            disabled={isUploadingPrescription}
+                            className="h-auto py-2"
+                          />
+                          <p className={dmSans.className + ' text-xs text-[#7C776F]'}>
+                            Sube una foto clara de tu fórmula. Formatos permitidos: JPG, PNG o WEBP.
+                          </p>
+                        </div>
+
+                        <div className="rounded-2xl border border-[#ECE5D8] bg-[#FCFBF8] p-4 text-sm text-[#5B554C]">
+                          {isUploadingPrescription ? (
+                            <p className={dmSans.className}>Cargando fórmula...</p>
+                          ) : prescription.imagePath ? (
+                            <div className="space-y-1">
+                              <p className={dmSans.className + ' font-semibold text-[#0F0F0D]'}>
+                                Fórmula adjunta
+                              </p>
+                              <p className={dmSans.className}>
+                                {prescription.imageFileName ?? 'Archivo cargado'}
+                              </p>
+                            </div>
+                          ) : (
+                            <p className={dmSans.className}>Aún no has adjuntado una fórmula.</p>
+                          )}
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <Label htmlFor="upload-prescription-notes" className={dmSans.className}>
+                            Observaciones
+                          </Label>
+                          <Textarea
+                            id="upload-prescription-notes"
+                            rows={3}
+                            value={prescription.notes ?? ''}
+                            onChange={(event) =>
+                              setPrescription((current) => ({
+                                ...current,
+                                notes: event.target.value,
+                              }))
+                            }
+                            placeholder="Ej. fórmula vigente, uso permanente, observaciones del optómetra, etc."
+                          />
+                        </div>
+
+                        <label className="flex items-start gap-3 rounded-2xl border border-[#E8D8B7] bg-[#FFF9EE] px-4 py-3 text-sm text-[#51483A]">
+                          <Checkbox
+                            checked={prescription.legalConsent}
+                            onCheckedChange={(checked) =>
+                              setPrescription((current) => ({
+                                ...current,
+                                legalConsent: Boolean(checked),
+                              }))
+                            }
+                          />
+                          <span className={dmSans.className}>
+                            Autorizo a OpticaAI a almacenar la imagen de mi fórmula y usarla para la
+                            gestión del pedido y verificaciones futuras.
                           </span>
                         </label>
                       </div>

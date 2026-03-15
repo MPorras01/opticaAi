@@ -38,7 +38,7 @@ export type LensFilterOption =
   | 'anti-reflective'
   | 'uv-protection'
   | 'polarized'
-export type PrescriptionMode = 'manual' | 'pending'
+export type PrescriptionMode = 'manual' | 'upload' | 'pending'
 export type PrescriptionEyeValues = {
   sphere?: string
   cylinder?: string
@@ -51,6 +51,8 @@ export type PrescriptionData = {
   pd?: string
   addPower?: string
   notes?: string
+  imagePath?: string
+  imageFileName?: string
   legalConsent: boolean
   legalAcceptedAt?: string | null
 }

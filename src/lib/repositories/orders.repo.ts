@@ -1,3 +1,4 @@
+import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import type { CreateOrderInput, Order, OrderItem, OrderStatus, OrderWithItems } from '@/types'
 
@@ -89,11 +90,71 @@ export async function createOrder(
       throw itemsError
     }
 
+    const uploadedPrescriptions = data.items
+      .map((item) => ({
+        imagePath: item.prescription?.imagePath?.trim(),
+        prescription: item.prescription,
+      }))
+      .filter(
+        (
+          item
+        ): item is {
+          imagePath: string
+          prescription: NonNullable<(typeof data.items)[number]['prescription']>
+        } => Boolean(item.imagePath)
+      )
+
+    if (
+      uploadedPrescriptions.length > 0 ||
+      data.items.some((item) => item.prescription?.imagePath)
+    ) {
+      const admin = createAdminClient()
+      const primaryPrescriptionPath = uploadedPrescriptions[0]?.imagePath ?? null
+
+      if (primaryPrescriptionPath) {
+        const { error: updateOrderError } = await admin
+          .from('orders')
+          .update({ prescription_url: primaryPrescriptionPath })
+          .eq('id', createdOrder.id)
+
+        if (updateOrderError) {
+          throw updateOrderError
+        }
+      }
+
+      if (uploadedPrescriptions.length > 0) {
+        const prescriptionsPayload = uploadedPrescriptions.map(({ imagePath, prescription }) => ({
+          order_id: createdOrder.id,
+          customer_id: userId ?? null,
+          image_url: imagePath,
+          od_sphere: prescription.rightEye.sphere ? Number(prescription.rightEye.sphere) : null,
+          od_cylinder: prescription.rightEye.cylinder
+            ? Number(prescription.rightEye.cylinder)
+            : null,
+          od_axis: prescription.rightEye.axis ? Number(prescription.rightEye.axis) : null,
+          os_sphere: prescription.leftEye.sphere ? Number(prescription.leftEye.sphere) : null,
+          os_cylinder: prescription.leftEye.cylinder ? Number(prescription.leftEye.cylinder) : null,
+          os_axis: prescription.leftEye.axis ? Number(prescription.leftEye.axis) : null,
+          pd: prescription.pd ? Number(prescription.pd) : null,
+          add_power: prescription.addPower ? Number(prescription.addPower) : null,
+          notes: prescription.notes ?? null,
+        }))
+
+        const { error: prescriptionError } = await admin
+          .from('prescriptions')
+          .insert(prescriptionsPayload)
+
+        if (prescriptionError) {
+          throw prescriptionError
+        }
+      }
+    }
+
     return createdOrder as Pick<Order, 'id' | 'order_number'>
   } catch (error) {
     if (createdOrderId) {
       try {
-        const admin = await createServerClient()
+        const admin = createAdminClient()
         await admin.from('orders').delete().eq('id', createdOrderId)
       } catch {
         // Best-effort rollback if item insertion fails.

@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import {
   createOrder,
@@ -44,6 +45,65 @@ function getErrorMessage(error: unknown): string {
   }
 
   return 'Error desconocido'
+}
+
+function toSlug(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+function getFileExtension(file: File): string {
+  const explicit = file.name.split('.').pop()?.toLowerCase()
+  if (explicit) {
+    return explicit
+  }
+
+  if (file.type === 'image/png') return 'png'
+  if (file.type === 'image/webp') return 'webp'
+  return 'jpg'
+}
+
+export async function uploadPrescriptionImageAction(
+  file: File,
+  productSlug: string
+): Promise<ActionResult<{ path: string; fileName: string }>> {
+  try {
+    if (!file || file.size === 0) {
+      throw new Error('Archivo de fórmula inválido')
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      throw new Error('La fórmula no puede superar 5MB')
+    }
+
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+      throw new Error('La fórmula debe estar en PNG, JPG o WEBP')
+    }
+
+    const supabase = createAdminClient()
+    const safeSlug = toSlug(productSlug || 'producto')
+    const extension = getFileExtension(file)
+    const fileName = `${safeSlug}-formula-${Date.now()}.${extension}`
+    const path = `intake/${new Date().getFullYear()}/${fileName}`
+
+    const { error } = await supabase.storage.from('prescriptions').upload(path, file, {
+      contentType: file.type,
+      upsert: false,
+    })
+
+    if (error) {
+      throw error
+    }
+
+    return { success: true, data: { path, fileName: file.name } }
+  } catch (error) {
+    return { success: false, error: getErrorMessage(error) }
+  }
 }
 
 export async function createOrderAction(

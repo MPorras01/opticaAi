@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { Results } from '@mediapipe/face_mesh'
 
-import { AR_SETTINGS, lerp } from '@/config/ar.config'
+import { AR_SETTINGS } from '@/config/ar.config'
 
 export type FaceLandmark = {
   x: number
@@ -31,54 +32,21 @@ export interface FaceDetection {
   stopDetection: () => void
 }
 
-type DetectorLike = {
-  estimateFaces: (...args: unknown[]) => Promise<unknown[]>
-  dispose?: () => void
-  reset?: () => void
+const PREVIOUS_WEIGHT = 0.8
+const CURRENT_WEIGHT = 0.2
+
+function smoothValue(previous: number, current: number): number {
+  return previous * PREVIOUS_WEIGHT + current * CURRENT_WEIGHT
 }
 
-type FaceLike = {
-  keypoints?: Array<{ x: number; y: number; z?: number; score?: number }>
-  faceInViewConfidence?: number
-}
-
-function clamp01(value: number): number {
-  if (Number.isNaN(value)) return 0
-  if (value < 0) return 0
-  if (value > 1) return 1
-  return value
-}
-
-function normalizeLandmarks(keypoints: FaceLike['keypoints'], width: number, height: number): NormalizedLandmarkList {
-  if (!keypoints || keypoints.length === 0 || width <= 0 || height <= 0) {
-    return []
-  }
-
+function normalizeLandmarks(keypoints: any[]): NormalizedLandmarkList {
+  if (!keypoints || keypoints.length === 0) return []
   return keypoints.map((point) => ({
-    x: point.x / width,
-    y: point.y / height,
-    // Keep z in a compact range for stable 3D overlay consumption.
-    z: typeof point.z === 'number' ? Math.max(-1, Math.min(1, point.z / width)) : undefined,
-    visibility: typeof point.score === 'number' ? clamp01(point.score) : undefined,
+    x: point.x,
+    y: point.y,
+    z: typeof point.z === 'number' ? point.z : undefined,
+    visibility: 1.0, // MediaPipe native returns 1 for visible points array usually
   }))
-}
-
-function estimateConfidence(face: FaceLike, normalized: NormalizedLandmarkList): number {
-  if (typeof face.faceInViewConfidence === 'number') {
-    return clamp01(face.faceInViewConfidence)
-  }
-
-  const pointScores = normalized
-    .map((point) => point.visibility)
-    .filter((score): score is number => typeof score === 'number')
-
-  if (pointScores.length > 0) {
-    const average = pointScores.reduce((acc, value) => acc + value, 0) / pointScores.length
-    return clamp01(average)
-  }
-
-  // Fallback confidence by detected landmark coverage.
-  return clamp01(normalized.length / 478)
 }
 
 export function useFaceDetection({ videoRef }: UseFaceDetectionParams): FaceDetection {
@@ -92,16 +60,17 @@ export function useFaceDetection({ videoRef }: UseFaceDetectionParams): FaceDete
   const [fps, setFps] = useState(0)
   const [confidenceScore, setConfidenceScore] = useState(0)
 
-  const detectorRef = useRef<DetectorLike | null>(null)
-  const rafIdRef = useRef<number | null>(null)
-  const fpsIntervalRef = useRef<number | null>(null)
+  // We use type any here to bypass Turbopack strict exports for the class instance
+  const faceMeshRef = useRef<any>(null)
   const isPausedRef = useRef(false)
   const isProcessingFrameRef = useRef(false)
-  const smoothedLandmarksRef = useRef<NormalizedLandmarkList | null>(null)
-  const warmupFrameCountRef = useRef(0)
+
+  const rafIdRef = useRef<number | null>(null)
   const framesInSecondRef = useRef(0)
-  const frameCountRef = useRef(0)
-  const isMobileRef = useRef(false)
+  const processedFrameCountRef = useRef(0)
+  const fpsIntervalRef = useRef<number | null>(null)
+  const smoothedLandmarksRef = useRef<NormalizedLandmarkList | null>(null)
+  const hasLoggedLandmarksRef = useRef(false)
 
   const pauseDetection = useCallback(() => {
     isPausedRef.current = true
@@ -117,26 +86,22 @@ export function useFaceDetection({ videoRef }: UseFaceDetectionParams): FaceDete
       rafIdRef.current = null
     }
 
+    if (faceMeshRef.current) {
+      faceMeshRef.current.close()
+      faceMeshRef.current = null
+    }
+
     if (fpsIntervalRef.current !== null) {
       window.clearInterval(fpsIntervalRef.current)
       fpsIntervalRef.current = null
     }
 
-    const detector = detectorRef.current
-    if (detector?.dispose) {
-      detector.dispose()
-    } else if (detector?.reset) {
-      detector.reset()
-    }
-
-    detectorRef.current = null
     isPausedRef.current = false
     isProcessingFrameRef.current = false
     smoothedLandmarksRef.current = null
-    warmupFrameCountRef.current = 0
     framesInSecondRef.current = 0
-    frameCountRef.current = 0
-    isMobileRef.current = false
+    processedFrameCountRef.current = 0
+    hasLoggedLandmarksRef.current = false
 
     setLandmarks(null)
     setFaceDetected(false)
@@ -147,6 +112,52 @@ export function useFaceDetection({ videoRef }: UseFaceDetectionParams): FaceDete
     setIsLoading(false)
     setError(null)
     setStatus('idle')
+    console.log('[FaceMesh] Stopped.')
+  }, [])
+
+  const handleResults = useCallback((results: Results) => {
+    if (isPausedRef.current) return
+
+    framesInSecondRef.current += 1
+
+    if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+      setFaceCount(results.multiFaceLandmarks.length)
+      setConfidenceScore(1.0) // Native mediapipe assumes face is detected if landmarks array is populated securely
+
+      const rawLandmarks = results.multiFaceLandmarks[0]
+      const normalized = normalizeLandmarks(rawLandmarks)
+
+      const previous = smoothedLandmarksRef.current
+      const smoothed: NormalizedLandmarkList = previous
+        ? normalized.map((raw, index) => {
+            const prev = previous[index] ?? raw
+            return {
+              x: smoothValue(prev.x, raw.x),
+              y: smoothValue(prev.y, raw.y),
+              z:
+                typeof raw.z === 'number' && typeof prev.z === 'number'
+                  ? smoothValue(prev.z, raw.z)
+                  : raw.z,
+              visibility: raw.visibility,
+            }
+          })
+        : normalized.map((point) => ({ ...point }))
+
+      smoothedLandmarksRef.current = smoothed
+      setLandmarks(smoothed)
+      setFaceDetected(true)
+
+      if (!hasLoggedLandmarksRef.current) {
+        console.info('[FaceMesh] landmarks detected', { count: smoothed.length })
+        hasLoggedLandmarksRef.current = true
+      }
+    } else {
+      setFaceCount(0)
+      setConfidenceScore(0)
+      setLandmarks(null)
+      setFaceDetected(false)
+      hasLoggedLandmarksRef.current = false
+    }
   }, [])
 
   const startDetection = useCallback(async () => {
@@ -157,8 +168,8 @@ export function useFaceDetection({ videoRef }: UseFaceDetectionParams): FaceDete
       return
     }
 
-    const video = videoRef.current
-    if (!video) {
+    const videoElement = videoRef.current
+    if (!videoElement) {
       setError('No se encontro el elemento de video para iniciar la deteccion.')
       return
     }
@@ -166,142 +177,78 @@ export function useFaceDetection({ videoRef }: UseFaceDetectionParams): FaceDete
     stopDetection()
     setIsLoading(true)
     setStatus('loading')
+    console.log('[FaceMesh] Starting initialization...')
 
     try {
-      const tf = await import('@tensorflow/tfjs-core')
-      try {
-        await import('@tensorflow/tfjs-backend-webgl')
-        await tf.setBackend('webgl')
-        await tf.ready()
-      } catch {
-        console.error('[useFaceDetection] No se pudo iniciar WebGL. Activando fallback a CPU.')
-        try {
-          await tf.setBackend('cpu')
-          await tf.ready()
-        } catch (cpuError) {
-          console.error('[useFaceDetection] Fallo al activar backend CPU:', cpuError)
-          throw cpuError
+      // Dynamically import FaceMesh to bypass Turbopack's CJS strict export checking
+      const mediapipeFaceMesh = await import('@mediapipe/face_mesh')
+      const FaceMeshConstructor =
+        mediapipeFaceMesh.FaceMesh ||
+        (mediapipeFaceMesh as any).default?.FaceMesh ||
+        (mediapipeFaceMesh as any).FaceMesh
+
+      if (!FaceMeshConstructor) {
+        throw new Error('Modulos de FaceMesh no se exportaron correctamente del paquete.')
+      }
+
+      const faceMesh = new FaceMeshConstructor({
+        locateFile: (file: string) => {
+          return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
+        },
+      })
+
+      faceMesh.setOptions({
+        maxNumFaces: AR_SETTINGS.faceMesh.maxNumFaces,
+        refineLandmarks: AR_SETTINGS.faceMesh.refineLandmarks,
+        minDetectionConfidence: AR_SETTINGS.faceMesh.minDetectionConfidence,
+        minTrackingConfidence: AR_SETTINGS.faceMesh.minTrackingConfidence,
+      })
+
+      faceMesh.onResults(handleResults)
+      faceMeshRef.current = faceMesh
+
+      console.log('[FaceMesh] Model logic initialized. Linking to Camera loop...')
+
+      const processFrame = async () => {
+        if (
+          !isPausedRef.current &&
+          videoElement &&
+          faceMeshRef.current &&
+          videoElement.readyState >= 2
+        ) {
+          if (!isProcessingFrameRef.current) {
+            isProcessingFrameRef.current = true
+            try {
+              processedFrameCountRef.current += 1
+              if (processedFrameCountRef.current % 120 === 0) {
+                console.debug('[FaceMesh] frames being processed', {
+                  frames: processedFrameCountRef.current,
+                })
+              }
+              await faceMeshRef.current.send({ image: videoElement })
+            } catch (err) {
+              console.error('[FaceMesh] Frame processing error', err)
+            } finally {
+              isProcessingFrameRef.current = false
+            }
+          }
         }
+        rafIdRef.current = requestAnimationFrame(processFrame)
       }
 
-      isMobileRef.current = /Android|iPhone|iPad/i.test(navigator.userAgent)
-
-      const faceLandmarksDetection = await import(
-        '@tensorflow-models/face-landmarks-detection/dist/face-landmarks-detection.js'
-      )
-
-      const fld = (faceLandmarksDetection.default ?? faceLandmarksDetection) as {
-        createDetector: (...args: unknown[]) => Promise<unknown>
-        SupportedModels: { MediaPipeFaceMesh: unknown }
-      }
-
-      const detector = (await fld.createDetector(fld.SupportedModels.MediaPipeFaceMesh, {
-        runtime: 'tfjs' as const,
-        refineLandmarks: true,
-      })) as unknown as DetectorLike
-
-      detectorRef.current = detector
+      rafIdRef.current = requestAnimationFrame(processFrame)
+      console.log('[FaceMesh] Camera stream linked and detection running.')
 
       fpsIntervalRef.current = window.setInterval(() => {
         setFps(framesInSecondRef.current)
         framesInSecondRef.current = 0
       }, 1000)
 
-      const processFrame = async () => {
-        const activeVideo = videoRef.current
-        const activeDetector = detectorRef.current
-
-        if (!activeVideo || !activeDetector) {
-          return
-        }
-
-        if (
-          !isPausedRef.current &&
-          activeVideo.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
-          !isProcessingFrameRef.current
-        ) {
-          frameCountRef.current += 1
-
-          // Skip every other frame on mobile to keep UI responsive.
-          if (isMobileRef.current && frameCountRef.current % 2 !== 0) {
-            rafIdRef.current = requestAnimationFrame(processFrame)
-            return
-          }
-
-          isProcessingFrameRef.current = true
-
-          try {
-            const faces = (await activeDetector.estimateFaces(activeVideo, {
-              flipHorizontal: false,
-            })) as FaceLike[]
-
-            setFaceCount(faces.length)
-
-            const firstFace = faces[0]
-            if (!firstFace?.keypoints || firstFace.keypoints.length === 0) {
-              setLandmarks(null)
-              setFaceDetected(false)
-              setConfidenceScore(0)
-            } else {
-              const width = activeVideo.videoWidth || AR_SETTINGS.videoWidth
-              const height = activeVideo.videoHeight || AR_SETTINGS.videoHeight
-
-              const normalized = normalizeLandmarks(firstFace.keypoints, width, height)
-              const confidence = estimateConfidence(firstFace, normalized)
-              setConfidenceScore(confidence)
-
-              if (confidence < AR_SETTINGS.minConfidenceToRender) {
-                setLandmarks(null)
-                setFaceDetected(false)
-              } else {
-                warmupFrameCountRef.current += 1
-
-                if (warmupFrameCountRef.current <= 10) {
-                  setLandmarks(null)
-                  setFaceDetected(false)
-                } else {
-                  const previous = smoothedLandmarksRef.current
-                  const smoothed: NormalizedLandmarkList = previous
-                    ? normalized.map((raw, index) => {
-                        const prev = previous[index] ?? raw
-                        return {
-                          x: lerp(prev.x, raw.x, AR_SETTINGS.smoothingFactor),
-                          y: lerp(prev.y, raw.y, AR_SETTINGS.smoothingFactor),
-                          z:
-                            typeof raw.z === 'number' && typeof prev.z === 'number'
-                              ? lerp(prev.z, raw.z, AR_SETTINGS.smoothingFactor)
-                              : raw.z,
-                          visibility: raw.visibility,
-                        }
-                      })
-                    : normalized.map((point) => ({ ...point }))
-
-                  smoothedLandmarksRef.current = smoothed
-                  setLandmarks(smoothed)
-                  setFaceDetected(true)
-                }
-              }
-            }
-
-            framesInSecondRef.current += 1
-          } catch {
-            console.error('[useFaceDetection] Error procesando frame de deteccion facial.')
-            // Ignore transient frame-level failures and keep loop alive.
-          } finally {
-            isProcessingFrameRef.current = false
-          }
-        }
-
-        rafIdRef.current = requestAnimationFrame(processFrame)
-      }
-
-      rafIdRef.current = requestAnimationFrame(processFrame)
-
       setIsDetecting(true)
       setIsLoading(false)
       setStatus('running')
     } catch (detectionError) {
-      console.error('[useFaceDetection] Error inicializando detector facial:', detectionError)
+      console.error('[FaceMesh] Error:', detectionError)
       stopDetection()
       setError(
         detectionError instanceof Error
@@ -311,7 +258,7 @@ export function useFaceDetection({ videoRef }: UseFaceDetectionParams): FaceDete
       setIsLoading(false)
       setStatus('error')
     }
-  }, [stopDetection, videoRef])
+  }, [stopDetection, videoRef, handleResults])
 
   useEffect(() => {
     return () => {

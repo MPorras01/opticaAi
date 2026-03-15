@@ -11,6 +11,43 @@ type UseCameraResult = {
   takeSnapshot: () => string | null
 }
 
+async function waitForVideoReady(video: HTMLVideoElement, timeoutMs = 8000): Promise<void> {
+  if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && video.videoWidth > 0) {
+    return
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    let timeoutId: number | null = null
+
+    const cleanup = () => {
+      video.removeEventListener('loadedmetadata', onReady)
+      video.removeEventListener('loadeddata', onReady)
+      video.removeEventListener('canplay', onReady)
+      video.removeEventListener('playing', onReady)
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId)
+      }
+    }
+
+    const onReady = () => {
+      if (video.videoWidth > 0 && video.videoHeight > 0) {
+        cleanup()
+        resolve()
+      }
+    }
+
+    timeoutId = window.setTimeout(() => {
+      cleanup()
+      reject(new Error('Timeout esperando video listo para deteccion'))
+    }, timeoutMs)
+
+    video.addEventListener('loadedmetadata', onReady)
+    video.addEventListener('loadeddata', onReady)
+    video.addEventListener('canplay', onReady)
+    video.addEventListener('playing', onReady)
+  })
+}
+
 export function useCamera(): UseCameraResult {
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
@@ -36,6 +73,7 @@ export function useCamera(): UseCameraResult {
     streamRef.current = null
     setStream(null)
     setIsReady(false)
+    console.info('[AR][Camera] camera released')
   }, [])
 
   const requestCamera = useCallback(async () => {
@@ -102,20 +140,13 @@ export function useCamera(): UseCameraResult {
       video.srcObject = requestedStream
       await video.play()
 
-      // Some browsers resolve play() before dimensions are available.
-      // Wait until metadata is ready so downstream logic can read videoWidth/videoHeight.
-      if (video.readyState < HTMLMediaElement.HAVE_METADATA) {
-        await new Promise<void>((resolve) => {
-          const handleLoadedMetadata = () => {
-            video.removeEventListener('loadedmetadata', handleLoadedMetadata)
-            resolve()
-          }
-
-          video.addEventListener('loadedmetadata', handleLoadedMetadata)
-        })
-      }
+      await waitForVideoReady(video)
 
       setIsReady(true)
+      console.info('[AR][Camera] camera started', {
+        width: video.videoWidth,
+        height: video.videoHeight,
+      })
     } catch (cameraError) {
       releaseCamera()
 

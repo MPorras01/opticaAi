@@ -1,9 +1,4 @@
-import type {
-  LensFilterOption,
-  LensType,
-  PrescriptionData,
-  PrescriptionEyeValues,
-} from '@/types'
+import type { LensFilterOption, LensType, PrescriptionData, PrescriptionEyeValues } from '@/types'
 
 type LensConfigShape = {
   id: string
@@ -61,6 +56,8 @@ export function normalizePrescriptionData(
     pd: normalizeValue(prescription.pd),
     addPower: normalizeValue(prescription.addPower),
     notes: normalizeValue(prescription.notes),
+    imagePath: normalizeValue(prescription.imagePath),
+    imageFileName: normalizeValue(prescription.imageFileName),
     legalConsent: prescription.legalConsent,
     legalAcceptedAt: prescription.legalAcceptedAt ?? null,
   }
@@ -75,14 +72,16 @@ export function hasPrescriptionDetails(prescription?: PrescriptionData | null) {
 
   return Boolean(
     normalized.rightEye.sphere ||
-      normalized.rightEye.cylinder ||
-      normalized.rightEye.axis ||
-      normalized.leftEye.sphere ||
-      normalized.leftEye.cylinder ||
-      normalized.leftEye.axis ||
-      normalized.pd ||
-      normalized.addPower ||
-      normalized.notes
+    normalized.rightEye.cylinder ||
+    normalized.rightEye.axis ||
+    normalized.leftEye.sphere ||
+    normalized.leftEye.cylinder ||
+    normalized.leftEye.axis ||
+    normalized.pd ||
+    normalized.addPower ||
+    normalized.notes ||
+    normalized.imagePath ||
+    normalized.imageFileName
   )
 }
 
