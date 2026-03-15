@@ -72,14 +72,18 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   }
 }
 
-export default async function ProductDetailRoute({ params }: { params: Params }) {
-  const { slug } = await params
+type PageData = {
+  product: Awaited<ReturnType<typeof findProductBySlug>> & { images: string[] }
+  relatedProducts: Awaited<ReturnType<typeof getRelatedProducts>>
+  whatsappHref: string
+  lensOptions: Awaited<ReturnType<typeof getLensOptions>>
+  isLoggedIn: boolean
+}
 
+async function fetchPageData(slug: string): Promise<PageData | null> {
   const productResult = await findProductBySlug(slug).catch(() => null)
 
-  if (!productResult) {
-    return <ProductNotFound />
-  }
+  if (!productResult) return null
 
   const product = {
     ...productResult,
@@ -94,21 +98,37 @@ export default async function ProductDetailRoute({ params }: { params: Params })
   const whatsappMessage = `${siteConfig.whatsapp.message} Me interesa: ${product.name}`
   const whatsappHref = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(whatsappMessage)}`
 
-  const [lensOptions, supabase] = await Promise.all([
-    getLensOptions().catch(() => []),
-    createClient(),
-  ])
-  const {
-    data: { user },
-  } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }))
+  let lensOptions: Awaited<ReturnType<typeof getLensOptions>> = []
+  let isLoggedIn = false
+  try {
+    const [fetchedOptions, supabase] = await Promise.all([
+      getLensOptions().catch(() => []),
+      createClient(),
+    ])
+    lensOptions = fetchedOptions
+    const { data } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }))
+    isLoggedIn = Boolean(data.user)
+  } catch {
+    // Non-critical: proceed without lens options or user session
+  }
+
+  return { product, relatedProducts, whatsappHref, lensOptions, isLoggedIn }
+}
+
+export default async function ProductDetailRoute({ params }: { params: Params }) {
+  const { slug } = await params
+
+  const data = await fetchPageData(slug).catch(() => null)
+
+  if (!data) return <ProductNotFound />
 
   return (
     <ProductDetail
-      product={product}
-      relatedProducts={relatedProducts}
-      whatsappHref={whatsappHref}
-      lensOptions={lensOptions}
-      isLoggedIn={Boolean(user)}
+      product={data.product}
+      relatedProducts={data.relatedProducts}
+      whatsappHref={data.whatsappHref}
+      lensOptions={data.lensOptions}
+      isLoggedIn={data.isLoggedIn}
     />
   )
 }
