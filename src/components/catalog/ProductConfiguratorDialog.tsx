@@ -197,9 +197,9 @@ export function ProductConfiguratorDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={trigger} />
-      <DialogContent className="max-h-[95vh] max-w-[1320px] overflow-y-auto rounded-3xl border border-[#E6DECF] bg-[#FAF8F3] p-0">
-        <div className="grid gap-0 lg:grid-cols-[440px_minmax(0,1fr)] xl:grid-cols-[500px_minmax(0,1fr)]">
-          <section className="border-b border-[#E6DECF] bg-[#F4EEE1] p-5 lg:sticky lg:top-0 lg:h-[95vh] lg:border-r lg:border-b-0 lg:p-7">
+      <DialogContent className="max-h-[95vh] max-w-[1320px] overflow-hidden rounded-3xl border border-[#E6DECF] bg-[#FAF8F3] p-0">
+        <div className="grid gap-0 lg:h-[95vh] lg:grid-cols-[440px_minmax(0,1fr)] xl:grid-cols-[500px_minmax(0,1fr)]">
+          <section className="border-b border-[#E6DECF] bg-[#F4EEE1] p-5 lg:overflow-y-auto lg:border-r lg:border-b-0 lg:p-7">
             <div className="flex h-full flex-col gap-5">
               <div>
                 <p
@@ -280,7 +280,7 @@ export function ProductConfiguratorDialog({
             </div>
           </section>
 
-          <section className="flex min-h-[95vh] flex-col bg-[#FAF8F3]">
+          <section className="flex min-h-0 flex-col bg-[#FAF8F3] lg:overflow-y-auto">
             <div className="flex-1 px-5 py-5 lg:px-8 lg:py-7">
               <DialogHeader className="space-y-2 border-b border-[#E6DECF] pb-5">
                 <DialogTitle
@@ -295,7 +295,7 @@ export function ProductConfiguratorDialog({
                 </DialogDescription>
               </DialogHeader>
 
-              <div className="mt-6 space-y-6 pb-28">
+              <div className="mt-6 space-y-6 pb-8">
                 <section className="rounded-2xl border border-[#E6DECF] bg-white p-5">
                   <div className="mb-4 flex items-center justify-between">
                     <h3 className={dmSans.className + ' text-sm font-semibold text-[#0F0F0D]'}>
@@ -720,7 +720,7 @@ export function ProductConfiguratorDialog({
               </div>
             </div>
 
-            <div className="sticky bottom-0 border-t border-[#E6DECF] bg-white/95 px-5 py-4 backdrop-blur lg:px-8">
+            <div className="border-t border-[#E6DECF] bg-white px-5 py-4 lg:px-8">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className={dmSans.className + ' text-xs text-[#7B776E]'}>Resumen actual</p>
