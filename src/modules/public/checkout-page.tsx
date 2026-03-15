@@ -12,6 +12,12 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  LENS_FILTER_LABELS,
+  LENS_TYPE_LABELS,
+  hasPrescriptionDetails,
+  serializeLensNotes,
+} from '@/lib/utils/lens-config'
 import { cn } from '@/lib/utils'
 import useCartStore from '@/stores/cart.store'
 import type { OrderDeliveryType } from '@/types'
@@ -22,14 +28,6 @@ const playfairDisplay = Playfair_Display({
   style: ['normal', 'italic'],
   weight: ['500', '600'],
 })
-
-const LENS_LABELS: Record<string, string> = {
-  'sin-lente': 'Solo montura',
-  monofocal: 'Lente monofocal',
-  bifocal: 'Lente bifocal',
-  progresivo: 'Lente progresivo',
-  solar: 'Lente solar',
-}
 
 const WA_NUMBER = (process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? '57').replace(/\D/g, '')
 
@@ -87,8 +85,21 @@ export function CheckoutPage() {
 
     const itemLines = items
       .map(
-        (item) =>
-          `• ${item.name}${item.lensType ? ` (${LENS_LABELS[item.lensType] ?? item.lensType})` : ''} × ${item.quantity} — ${formatCOP(item.price * item.quantity)}`
+        (item) => {
+          const extras = [
+            item.lensType ? LENS_TYPE_LABELS[item.lensType] : null,
+            item.lensFilters?.length
+              ? `Filtros: ${item.lensFilters.map((filter) => LENS_FILTER_LABELS[filter]).join(', ')}`
+              : null,
+            item.prescription?.mode === 'manual' && hasPrescriptionDetails(item.prescription)
+              ? 'Formula registrada'
+              : item.prescription?.mode === 'pending'
+                ? 'Formula pendiente'
+                : null,
+          ].filter((value): value is string => Boolean(value))
+
+          return `• ${item.name}${extras.length ? ` (${extras.join(' · ')})` : ''} × ${item.quantity} — ${formatCOP(item.price * item.quantity)}`
+        }
       )
       .join('\n')
 
@@ -135,6 +146,9 @@ export function CheckoutPage() {
         quantity: item.quantity,
         unit_price: item.price,
         lens_type: item.lensType,
+        lens_filters: item.lensFilters,
+        prescription: item.prescription,
+        lens_notes: serializeLensNotes(item),
       })),
     })
 
@@ -314,7 +328,7 @@ export function CheckoutPage() {
 
             <ul className={cn(dmSans.className, 'space-y-3')}>
               {items.map((item) => (
-                <li key={item.id} className="flex items-center gap-3">
+                <li key={item.cartItemId ?? item.id} className="flex items-center gap-3">
                   {item.image && (
                     <div className="relative size-12 shrink-0 overflow-hidden rounded-lg border border-[#E2DDD6]">
                       <Image
@@ -329,9 +343,19 @@ export function CheckoutPage() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-[#0F0F0D]">{item.name}</p>
                     <p className="text-xs text-[#6E6E67]">
-                      {item.lensType ? (LENS_LABELS[item.lensType] ?? item.lensType) : 'Sin especificar'}{' '}
-                      · ×{item.quantity}
+                      {item.lensType ? LENS_TYPE_LABELS[item.lensType] : 'Sin especificar'} · ×
+                      {item.quantity}
                     </p>
+                    {item.lensFilters?.length ? (
+                      <p className="mt-1 text-[11px] text-[#8A877F]">
+                        {item.lensFilters.map((filter) => LENS_FILTER_LABELS[filter]).join(', ')}
+                      </p>
+                    ) : null}
+                    {item.prescription?.mode === 'manual' && hasPrescriptionDetails(item.prescription) ? (
+                      <p className="mt-1 text-[11px] text-[#8A877F]">Formula registrada con consentimiento</p>
+                    ) : item.prescription?.mode === 'pending' ? (
+                      <p className="mt-1 text-[11px] text-[#8A877F]">Formula pendiente por enviar</p>
+                    ) : null}
                   </div>
                   <span className="shrink-0 text-sm font-medium text-[#0F0F0D]">
                     {formatCOP(item.price * item.quantity)}

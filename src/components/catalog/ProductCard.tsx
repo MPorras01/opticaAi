@@ -5,6 +5,7 @@ import { DM_Sans, Playfair_Display } from 'next/font/google'
 import { Check, Plus } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
+import { ProductConfiguratorDialog } from '@/components/catalog/ProductConfiguratorDialog'
 import { formatCOP } from '@/lib/utils'
 import useCartStore from '@/stores/cart.store'
 import type { ProductWithCategory } from '@/types'
@@ -125,11 +126,28 @@ export function ProductCard({ product, priority = false }: ProductCardProps) {
           >
             {categoryName}
           </span>
+        </div>
+
+        <div className="flex items-center gap-2 pt-1">
+          <ProductConfiguratorDialog
+            product={product}
+            trigger={
+              <button
+                type="button"
+                className={
+                  dmSans.className +
+                  ' inline-flex h-9 flex-1 items-center justify-center rounded-full border border-[#D4A853] bg-white px-4 text-sm font-semibold text-[#8A6A2F] transition hover:bg-[#FFF6E5]'
+                }
+              >
+                Ver detalle
+              </button>
+            }
+          />
 
           <button
             type="button"
             onClick={handleAddToCart}
-            className="inline-flex size-8 items-center justify-center rounded-full bg-[#D4A853] text-[#0F0F0D] transition-all duration-300 ease-in hover:scale-[1.02] hover:bg-[#C79D4C] focus-visible:ring-2 focus-visible:ring-[#0F0F0D]/35 focus-visible:outline-none"
+            className="inline-flex size-9 items-center justify-center rounded-full bg-[#D4A853] text-[#0F0F0D] transition-all duration-300 ease-in hover:scale-[1.02] hover:bg-[#C79D4C] focus-visible:ring-2 focus-visible:ring-[#0F0F0D]/35 focus-visible:outline-none"
             aria-label={`Agregar ${product.name} al carrito`}
           >
             <span className="inline-flex items-center justify-center transition-transform duration-200">

@@ -1,14 +1,21 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
+import { buildCartItemSignature } from '@/lib/utils/lens-config'
+import type { LensFilterOption, LensType, PrescriptionData } from '@/types'
+
 export type CartItem = {
+  cartItemId?: string
+  configurationSignature?: string
   id: string
   name: string
   slug: string
   price: number
   image: string
   quantity: number
-  lensType?: 'sin-lente' | 'monofocal' | 'bifocal' | 'progresivo' | 'solar'
+  lensType?: LensType
+  lensFilters?: LensFilterOption[]
+  prescription?: PrescriptionData | null
 }
 
 type CartStore = {
@@ -27,6 +34,14 @@ type CartStore = {
   getItemById: (id: string) => CartItem | undefined
 }
 
+function createCartItemId() {
+  return `cart_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+}
+
+function resolveCartItemKey(item: CartItem) {
+  return item.cartItemId ?? item.id
+}
+
 const useCartStore = create<CartStore>()(
   persist(
     (set, get) => ({
@@ -34,15 +49,21 @@ const useCartStore = create<CartStore>()(
       isOpen: false,
       addItem: (item) =>
         set((state) => {
-          const existing = state.items.find((cartItem) => cartItem.id === item.id)
+          const configurationSignature = buildCartItemSignature(item)
+          const existing = state.items.find(
+            (cartItem) =>
+              (cartItem.configurationSignature ?? buildCartItemSignature(cartItem)) ===
+              configurationSignature
+          )
 
           if (existing) {
             return {
               items: state.items.map((cartItem) =>
-                cartItem.id === item.id
+                resolveCartItemKey(cartItem) === resolveCartItemKey(existing)
                   ? {
                       ...cartItem,
                       quantity: cartItem.quantity + 1,
+                      configurationSignature,
                     }
                   : cartItem
               ),
@@ -50,28 +71,46 @@ const useCartStore = create<CartStore>()(
           }
 
           return {
-            items: [...state.items, { ...item, quantity: 1 }],
+            items: [
+              ...state.items,
+              {
+                ...item,
+                cartItemId: createCartItemId(),
+                configurationSignature,
+                quantity: 1,
+              },
+            ],
           }
         }),
       removeItem: (id) =>
         set((state) => ({
-          items: state.items.filter((item) => item.id !== id),
+          items: state.items.filter((item) => resolveCartItemKey(item) !== id),
         })),
       updateQuantity: (id, quantity) =>
         set((state) => {
           if (quantity <= 0) {
             return {
-              items: state.items.filter((item) => item.id !== id),
+              items: state.items.filter((item) => resolveCartItemKey(item) !== id),
             }
           }
 
           return {
-            items: state.items.map((item) => (item.id === id ? { ...item, quantity } : item)),
+            items: state.items.map((item) =>
+              resolveCartItemKey(item) === id ? { ...item, quantity } : item
+            ),
           }
         }),
       updateLensType: (id, lensType) =>
         set((state) => ({
-          items: state.items.map((item) => (item.id === id ? { ...item, lensType } : item)),
+          items: state.items.map((item) =>
+            resolveCartItemKey(item) === id
+              ? {
+                  ...item,
+                  lensType,
+                  configurationSignature: buildCartItemSignature({ ...item, lensType }),
+                }
+              : item
+          ),
         })),
       clearCart: () => set({ items: [] }),
       openCart: () => set({ isOpen: true }),
@@ -79,7 +118,8 @@ const useCartStore = create<CartStore>()(
       toggleCart: () => set((state) => ({ isOpen: !state.isOpen })),
       getTotal: () => get().items.reduce((acc, item) => acc + item.price * item.quantity, 0),
       getItemCount: () => get().items.reduce((acc, item) => acc + item.quantity, 0),
-      getItemById: (id) => get().items.find((item) => item.id === id),
+      getItemById: (id) =>
+        get().items.find((item) => resolveCartItemKey(item) === id || item.id === id),
     }),
     {
       name: 'opticaai-cart',

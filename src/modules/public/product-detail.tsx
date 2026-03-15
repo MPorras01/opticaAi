@@ -5,19 +5,10 @@ import Link from 'next/link'
 import { DM_Sans, Playfair_Display } from 'next/font/google'
 import { useMemo, useState } from 'react'
 
+import { ProductConfiguratorDialog } from '@/components/catalog/ProductConfiguratorDialog'
 import { ProductCard } from '@/components/catalog/ProductCard'
-import { Button } from '@/components/ui/button'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { formatCOP } from '@/lib/utils'
-import useCartStore from '@/stores/cart.store'
-import type { CartItem } from '@/stores/cart.store'
 import type { Product, ProductWithCategory } from '@/types'
 
 const dmSans = DM_Sans({
@@ -31,14 +22,6 @@ const playfairDisplay = Playfair_Display({
   weight: ['500', '600', '700'],
 })
 
-const lensOptions: Array<{ label: string; value: NonNullable<CartItem['lensType']> }> = [
-  { label: 'Sin lente', value: 'sin-lente' },
-  { label: 'Monofocal', value: 'monofocal' },
-  { label: 'Bifocal', value: 'bifocal' },
-  { label: 'Progresivo', value: 'progresivo' },
-  { label: 'Solar', value: 'solar' },
-]
-
 type ProductDetailProps = {
   product: ProductWithCategory
   relatedProducts: Product[]
@@ -46,9 +29,6 @@ type ProductDetailProps = {
 }
 
 export function ProductDetail({ product, relatedProducts, whatsappHref }: ProductDetailProps) {
-  const addItem = useCartStore((state) => state.addItem)
-  const openCart = useCartStore((state) => state.openCart)
-
   const images = useMemo(() => {
     if (product.images.length > 0) {
       return product.images
@@ -58,7 +38,6 @@ export function ProductDetail({ product, relatedProducts, whatsappHref }: Produc
   }, [product.images])
 
   const [selectedImage, setSelectedImage] = useState(images[0])
-  const [lensType, setLensType] = useState<NonNullable<CartItem['lensType']>>('sin-lente')
 
   const attributes = [
     { label: 'Material', value: product.material },
@@ -66,19 +45,6 @@ export function ProductDetail({ product, relatedProducts, whatsappHref }: Produc
     { label: 'Genero', value: product.gender },
     { label: 'Color', value: product.color },
   ].filter((attribute) => Boolean(attribute.value))
-
-  const handleAddToCart = () => {
-    addItem({
-      id: product.id,
-      name: product.name,
-      slug: product.slug,
-      price: product.price,
-      image: selectedImage,
-      lensType,
-    })
-
-    openCart()
-  }
 
   return (
     <div className="bg-[#FAFAF8]">
@@ -158,32 +124,22 @@ export function ProductDetail({ product, relatedProducts, whatsappHref }: Produc
               </div>
             )}
 
-            <div className="space-y-2 pt-1">
-              <p className={dmSans.className + ' text-sm font-medium text-[#2D2D28]'}>Tipo de lente</p>
-              <Select value={lensType} onValueChange={(value) => setLensType(value as NonNullable<CartItem['lensType']>)}>
-                <SelectTrigger className="h-10 w-full border-[#E2DDD6] bg-[#FDFCF9]">
-                  <SelectValue placeholder="Selecciona tipo de lente" />
-                </SelectTrigger>
-                <SelectContent>
-                  {lensOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
             <div className="space-y-2.5 pt-2">
-              <Button
-                onClick={handleAddToCart}
-                className={
-                  dmSans.className +
-                  ' h-11 w-full rounded-full bg-[#D4A853] text-sm font-semibold text-[#0F0F0D] transition duration-300 hover:scale-[1.02] hover:bg-[#C79D4C]'
+              <ProductConfiguratorDialog
+                product={product}
+                initialImage={selectedImage}
+                trigger={
+                  <button
+                    type="button"
+                    className={
+                      dmSans.className +
+                      ' inline-flex h-11 w-full items-center justify-center rounded-full bg-[#D4A853] text-sm font-semibold text-[#0F0F0D] transition duration-300 hover:scale-[1.02] hover:bg-[#C79D4C]'
+                    }
+                  >
+                    Personalizar y agregar
+                  </button>
                 }
-              >
-                Agregar al carrito
-              </Button>
+              />
 
               {product.has_ar_overlay && (
                 <Link

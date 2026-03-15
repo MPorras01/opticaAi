@@ -13,6 +13,11 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
+import {
+  LENS_FILTER_LABELS,
+  LENS_TYPE_LABELS,
+  hasPrescriptionDetails,
+} from '@/lib/utils/lens-config'
 import { formatCOP } from '@/lib/utils'
 import useCartStore, { type CartItem } from '@/stores/cart.store'
 
@@ -30,13 +35,27 @@ const playfairDisplay = Playfair_Display({
 function CartRow({ item }: { item: CartItem }) {
   const removeItem = useCartStore((state) => state.removeItem)
   const updateQuantity = useCartStore((state) => state.updateQuantity)
+  const cartItemKey = item.cartItemId ?? item.id
+
+  const configLines = [
+    item.lensType ? `Lente: ${LENS_TYPE_LABELS[item.lensType]}` : null,
+    item.lensFilters?.length
+      ? `Filtros: ${item.lensFilters.map((filter) => LENS_FILTER_LABELS[filter]).join(', ')}`
+      : null,
+    item.prescription?.mode === 'manual' && hasPrescriptionDetails(item.prescription)
+      ? 'Formula registrada'
+      : item.prescription?.mode === 'pending'
+        ? 'Formula pendiente por enviar'
+        : null,
+    item.prescription?.legalConsent ? 'Consentimiento legal registrado' : null,
+  ].filter((line): line is string => Boolean(line))
 
   const decrease = () => {
-    updateQuantity(item.id, Math.max(1, item.quantity - 1))
+    updateQuantity(cartItemKey, Math.max(1, item.quantity - 1))
   }
 
   const increase = () => {
-    updateQuantity(item.id, Math.min(10, item.quantity + 1))
+    updateQuantity(cartItemKey, Math.min(10, item.quantity + 1))
   }
 
   return (
@@ -57,15 +76,15 @@ function CartRow({ item }: { item: CartItem }) {
             <h3 className={dmSans.className + ' line-clamp-1 text-sm font-semibold text-[#0F0F0D]'}>
               {item.name}
             </h3>
-            {item.lensType && item.lensType !== 'sin-lente' && (
-              <p className={dmSans.className + ' mt-0.5 text-xs text-[#8C8C84]'}>
-                Lente: {item.lensType}
+            {configLines.map((line) => (
+              <p key={line} className={dmSans.className + ' mt-0.5 text-xs text-[#8C8C84]'}>
+                {line}
               </p>
-            )}
+            ))}
           </div>
           <button
             type="button"
-            onClick={() => removeItem(item.id)}
+            onClick={() => removeItem(cartItemKey)}
             className="inline-flex size-7 items-center justify-center rounded-full text-[#A0A099] transition hover:bg-[#F3EEEA] hover:text-[#D64545]"
             aria-label={`Eliminar ${item.name} del carrito`}
           >
@@ -154,7 +173,7 @@ export function CartDrawer() {
           <>
             <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
               {items.map((item) => (
-                <CartRow key={item.id} item={item} />
+                <CartRow key={item.cartItemId ?? item.id} item={item} />
               ))}
             </div>
 

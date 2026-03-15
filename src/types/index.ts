@@ -31,6 +31,29 @@ export type OrderWithItems = Order & {
 }
 export type OrderInsert = TablesInsert<'orders'>
 export type OrderDeliveryType = 'pickup' | 'delivery'
+export type LensType = 'sin-lente' | 'monofocal' | 'bifocal' | 'progresivo' | 'solar'
+export type LensFilterOption =
+  | 'blue-light'
+  | 'photochromic'
+  | 'anti-reflective'
+  | 'uv-protection'
+  | 'polarized'
+export type PrescriptionMode = 'manual' | 'pending'
+export type PrescriptionEyeValues = {
+  sphere?: string
+  cylinder?: string
+  axis?: string
+}
+export type PrescriptionData = {
+  mode: PrescriptionMode
+  rightEye: PrescriptionEyeValues
+  leftEye: PrescriptionEyeValues
+  pd?: string
+  addPower?: string
+  notes?: string
+  legalConsent: boolean
+  legalAcceptedAt?: string | null
+}
 export type OrderStatus =
   | 'pending'
   | 'confirmed'
@@ -46,8 +69,10 @@ export interface CreateOrderInput {
     product_image?: OrderItem['product_image']
     quantity: OrderItem['quantity']
     unit_price: OrderItem['unit_price']
-    lens_type?: OrderItem['lens_type']
+    lens_type?: LensType
     lens_notes?: OrderItem['lens_notes']
+    lens_filters?: LensFilterOption[]
+    prescription?: PrescriptionData | null
   }>
   delivery_type: OrderDeliveryType
   delivery_address?: Order['delivery_address']
