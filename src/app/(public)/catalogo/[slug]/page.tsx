@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 
 import { siteConfig } from '@/config/site.config'
-import { getProductBySlug, getProducts, getRelatedProducts } from '@/lib/repositories'
+import { findProductBySlug, getProducts, getRelatedProducts } from '@/lib/repositories'
 import { getLensOptions } from '@/lib/repositories/lens-options.repo'
 import { createClient } from '@/lib/supabase/server'
 import { ProductDetail } from '@/modules/public/product-detail'
@@ -34,7 +34,14 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   const { slug } = await params
 
   try {
-    const product = await getProductBySlug(slug)
+    const product = await findProductBySlug(slug)
+
+    if (!product) {
+      return {
+        title: 'Producto no encontrado · OpticaAI',
+      }
+    }
+
     const image = product.images?.[0] ?? UNSPLASH_FALLBACK_IMAGE
 
     return {
@@ -56,23 +63,22 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
 export default async function ProductDetailRoute({ params }: { params: Params }) {
   const { slug } = await params
 
-  let product
-  let relatedProducts
+  const productResult = await findProductBySlug(slug).catch(() => null)
 
-  try {
-    product = await getProductBySlug(slug)
-    if (!product.images?.length) {
-      product = {
-        ...product,
-        images: [UNSPLASH_FALLBACK_IMAGE],
-      }
-    }
-    relatedProducts = product.category_id
-      ? await getRelatedProducts(product.id, product.category_id)
-      : []
-  } catch {
+  if (!productResult) {
     notFound()
   }
+
+  const product = !productResult.images?.length
+    ? {
+        ...productResult,
+        images: [UNSPLASH_FALLBACK_IMAGE],
+      }
+    : productResult
+
+  const relatedProducts = product.category_id
+    ? await getRelatedProducts(product.id, product.category_id).catch(() => [])
+    : []
 
   const whatsappNumber = siteConfig.whatsapp.number.replace(/\D/g, '')
   const whatsappMessage = `${siteConfig.whatsapp.message} Me interesa: ${product.name}`

@@ -102,6 +102,28 @@ export async function getProductBySlug(slug: string): Promise<ProductWithCategor
   }
 }
 
+/** Retrieves a single active product by slug, returning null when it does not exist. */
+export async function findProductBySlug(slug: string): Promise<ProductWithCategory | null> {
+  try {
+    const supabase = await getReadClient()
+
+    const { data, error } = await supabase
+      .from('products')
+      .select(PRODUCT_WITH_CATEGORY_SELECT)
+      .eq('slug', slug)
+      .eq('is_active', true)
+      .maybeSingle()
+
+    if (error) {
+      throw error
+    }
+
+    return (data as ProductWithCategory | null) ?? null
+  } catch (error) {
+    throw new Error(`No se pudo buscar el producto por slug: ${getErrorMessage(error)}`)
+  }
+}
+
 /** Retrieves a single product by id including category relation. */
 export async function getProductById(id: string): Promise<ProductWithCategory> {
   try {
