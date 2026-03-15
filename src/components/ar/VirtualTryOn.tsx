@@ -89,32 +89,38 @@ export function VirtualTryOn({
     }
 
     const runDetection = async () => {
-      setPhase('loading-model')
-      const startupTimeoutMs = 9000
+      try {
+        setPhase('loading-model')
+        const startupTimeoutMs = 9000
 
-      await Promise.race([
-        startDetection(),
-        new Promise<never>((_, reject) => {
-          window.setTimeout(() => {
-            reject(new Error('Timeout iniciando deteccion facial'))
-          }, startupTimeoutMs)
-        }),
-      ])
+        await Promise.race([
+          startDetection(),
+          new Promise<never>((_, reject) => {
+            window.setTimeout(() => {
+              reject(new Error('Timeout iniciando deteccion facial'))
+            }, startupTimeoutMs)
+          }),
+        ])
 
-      if (!detectionError) {
-        setPhase('running')
+        if (!detectionError) {
+          setPhase('running')
+        }
+      } catch (error) {
+        console.error('AR Error completo:', error)
+        console.error('AR Error mensaje:', error instanceof Error ? error.message : undefined)
+        console.error('AR Error stack:', error instanceof Error ? error.stack : undefined)
+
+        stopDetection()
+        setStartupError(
+          error instanceof Error
+            ? `No se pudo iniciar rapido el modelo: ${error.message}`
+            : 'No se pudo iniciar rapido el modelo de deteccion facial.'
+        )
+        setPhase('error')
       }
     }
 
-    runDetection().catch((cause) => {
-      stopDetection()
-      setStartupError(
-        cause instanceof Error
-          ? `No se pudo iniciar rapido el modelo: ${cause.message}`
-          : 'No se pudo iniciar rapido el modelo de deteccion facial.'
-      )
-      setPhase('error')
-    })
+    runDetection()
   }, [detectionError, hasPermission, isReady, phase, startDetection, stopDetection])
 
   useEffect(() => {

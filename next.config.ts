@@ -5,6 +5,17 @@ import { fileURLToPath } from 'node:url'
 const projectRoot = dirname(fileURLToPath(import.meta.url))
 
 const nextConfig: NextConfig = {
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        '@tensorflow/tfjs-node': false,
+      }
+    }
+
+    return config
+  },
+  // evitar que Next.js intente hacer SSR de TF.js
   experimental: {
     serverActions: {
       bodySizeLimit: '10mb',

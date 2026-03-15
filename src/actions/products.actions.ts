@@ -207,7 +207,11 @@ export async function uploadProductImage(file: File, productSlug: string): Promi
   return data.publicUrl
 }
 
-export async function uploadArOverlay(file: File, productSlug: string): Promise<string> {
+export async function uploadArOverlay(
+  file: File,
+  productSlug: string,
+  productId?: string
+): Promise<string> {
   await ensureAdminUser()
 
   if (!file || file.size === 0) {
@@ -232,6 +236,18 @@ export async function uploadArOverlay(file: File, productSlug: string): Promise<
   }
 
   const { data } = supabase.storage.from('ar-overlays').getPublicUrl(path)
+
+  if (productId) {
+    const { error: updateError } = await supabase
+      .from('products')
+      .update({ ar_overlay_url: data.publicUrl })
+      .eq('id', productId)
+
+    if (updateError) {
+      throw new Error(`No se pudo actualizar ar_overlay_url del producto: ${getErrorMessage(updateError)}`)
+    }
+  }
+
   return data.publicUrl
 }
 
@@ -439,7 +455,7 @@ export async function updateProductAction(
     const arOverlayFile = formData.get('ar_overlay')
     let arOverlayUrl = currentProduct.ar_overlay_url
     if (arOverlayFile instanceof File && arOverlayFile.size > 0) {
-      arOverlayUrl = await uploadArOverlay(arOverlayFile, slug)
+      arOverlayUrl = await uploadArOverlay(arOverlayFile, slug, id)
     }
 
     const payload = {

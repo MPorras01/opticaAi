@@ -1,6 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import * as faceLandmarksDetection from '@tensorflow-models/face-landmarks-detection'
-import '@tensorflow/tfjs-backend-webgl'
 
 import { AR_SETTINGS, lerp } from '@/config/ar.config'
 
@@ -22,6 +20,7 @@ export interface FaceDetection {
   isLoading: boolean
   isDetecting: boolean
   error: string | null
+  status: 'idle' | 'loading' | 'running' | 'error'
   faceDetected: boolean
   faceCount: number
   fps: number
@@ -87,6 +86,7 @@ export function useFaceDetection({ videoRef }: UseFaceDetectionParams): FaceDete
   const [isLoading, setIsLoading] = useState(false)
   const [isDetecting, setIsDetecting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [status, setStatus] = useState<'idle' | 'loading' | 'running' | 'error'>('idle')
   const [faceDetected, setFaceDetected] = useState(false)
   const [faceCount, setFaceCount] = useState(0)
   const [fps, setFps] = useState(0)
@@ -146,6 +146,7 @@ export function useFaceDetection({ videoRef }: UseFaceDetectionParams): FaceDete
     setIsDetecting(false)
     setIsLoading(false)
     setError(null)
+    setStatus('idle')
   }, [])
 
   const startDetection = useCallback(async () => {
@@ -164,32 +165,39 @@ export function useFaceDetection({ videoRef }: UseFaceDetectionParams): FaceDete
 
     stopDetection()
     setIsLoading(true)
+    setStatus('loading')
 
     try {
-      const tf = await import('@tensorflow/tfjs')
-
+      const tf = await import('@tensorflow/tfjs-core')
       try {
+        await import('@tensorflow/tfjs-backend-webgl')
         await tf.setBackend('webgl')
+        await tf.ready()
       } catch {
-        // Fallback for devices where WebGL is unavailable.
+        console.error('[useFaceDetection] No se pudo iniciar WebGL. Activando fallback a CPU.')
         try {
-          await tf.setBackend('wasm')
-        } catch {
           await tf.setBackend('cpu')
+          await tf.ready()
+        } catch (cpuError) {
+          console.error('[useFaceDetection] Fallo al activar backend CPU:', cpuError)
+          throw cpuError
         }
       }
 
-      await tf.ready()
-
       isMobileRef.current = /Android|iPhone|iPad/i.test(navigator.userAgent)
 
-      const fldDynamic = await import('@tensorflow-models/face-landmarks-detection')
-      const fld = fldDynamic ?? faceLandmarksDetection
+      const faceLandmarksDetection = await import(
+        '@tensorflow-models/face-landmarks-detection/dist/face-landmarks-detection.js'
+      )
+
+      const fld = (faceLandmarksDetection.default ?? faceLandmarksDetection) as {
+        createDetector: (...args: unknown[]) => Promise<unknown>
+        SupportedModels: { MediaPipeFaceMesh: unknown }
+      }
 
       const detector = (await fld.createDetector(fld.SupportedModels.MediaPipeFaceMesh, {
-        runtime: 'tfjs',
+        runtime: 'tfjs' as const,
         refineLandmarks: true,
-        maxFaces: 1,
       })) as unknown as DetectorLike
 
       detectorRef.current = detector
@@ -277,6 +285,7 @@ export function useFaceDetection({ videoRef }: UseFaceDetectionParams): FaceDete
 
             framesInSecondRef.current += 1
           } catch {
+            console.error('[useFaceDetection] Error procesando frame de deteccion facial.')
             // Ignore transient frame-level failures and keep loop alive.
           } finally {
             isProcessingFrameRef.current = false
@@ -290,7 +299,9 @@ export function useFaceDetection({ videoRef }: UseFaceDetectionParams): FaceDete
 
       setIsDetecting(true)
       setIsLoading(false)
+      setStatus('running')
     } catch (detectionError) {
+      console.error('[useFaceDetection] Error inicializando detector facial:', detectionError)
       stopDetection()
       setError(
         detectionError instanceof Error
@@ -298,6 +309,7 @@ export function useFaceDetection({ videoRef }: UseFaceDetectionParams): FaceDete
           : 'No se pudo iniciar la deteccion facial por un error desconocido.'
       )
       setIsLoading(false)
+      setStatus('error')
     }
   }, [stopDetection, videoRef])
 
@@ -312,6 +324,7 @@ export function useFaceDetection({ videoRef }: UseFaceDetectionParams): FaceDete
     isLoading,
     isDetecting,
     error,
+    status,
     faceDetected,
     faceCount,
     fps,
