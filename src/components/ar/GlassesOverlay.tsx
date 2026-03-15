@@ -186,9 +186,11 @@ export function GlassesOverlay({
 
         const eyeCenterY = (leftIris.y + rightIris.y) / 2
         const browCenterY = (leftEyebrowInner.y + rightEyebrowInner.y) / 2
+        const browToEye = eyeCenterY - browCenterY
+        const bridgeInfluence = clamp(0.15 + props.fitProfile.bridgeOffset * 0.6, -0.1, 0.35)
         const centerY =
-          browCenterY +
-          (eyeCenterY - browCenterY) * (0.3 + props.fitProfile.bridgeOffset) +
+          eyeCenterY +
+          browToEye * bridgeInfluence +
           pitch * (irisDistance * 0.12) +
           H * props.fitProfile.verticalOffset
 
