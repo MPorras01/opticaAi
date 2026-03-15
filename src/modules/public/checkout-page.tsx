@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import useCartStore from '@/stores/cart.store'
+import type { OrderDeliveryType } from '@/types'
 
 const dmSans = DM_Sans({ subsets: ['latin'], weight: ['400', '500', '600'] })
 const playfairDisplay = Playfair_Display({
@@ -32,6 +33,11 @@ const LENS_LABELS: Record<string, string> = {
 
 const WA_NUMBER = (process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? '57').replace(/\D/g, '')
 
+const DELIVERY_OPTIONS = [
+  { value: 'pickup' as const, label: 'Recoger en tienda' },
+  { value: 'delivery' as const, label: 'Envío a domicilio' },
+]
+
 function formatCOP(value: number) {
   return new Intl.NumberFormat('es-CO', {
     style: 'currency',
@@ -44,7 +50,7 @@ export function CheckoutPage() {
   const router = useRouter()
   const { items, getTotal, clearCart } = useCartStore()
 
-  const [delivery, setDelivery] = useState<'recogida' | 'domicilio'>('recogida')
+  const [delivery, setDelivery] = useState<OrderDeliveryType>('pickup')
   const [submitting, setSubmitting] = useState(false)
   const [form, setForm] = useState({
     customer_name: '',
@@ -65,7 +71,7 @@ export function CheckoutPage() {
       toast.error('Nombre y teléfono son requeridos')
       return false
     }
-    if (delivery === 'domicilio' && !form.delivery_address.trim()) {
+    if (delivery === 'delivery' && !form.delivery_address.trim()) {
       toast.error('Ingresa tu dirección de entrega')
       return false
     }
@@ -95,8 +101,8 @@ export function CheckoutPage() {
       '🛍️ *Productos:*',
       itemLines,
       '',
-      `📦 *Entrega:* ${delivery === 'recogida' ? 'Recoger en tienda' : 'Envío a domicilio'}`,
-      ...(delivery === 'domicilio' && form.delivery_address
+      `📦 *Entrega:* ${delivery === 'pickup' ? 'Recoger en tienda' : 'Envío a domicilio'}`,
+      ...(delivery === 'delivery' && form.delivery_address
         ? [`📍 *Dirección:* ${form.delivery_address.trim()}`]
         : []),
       '',
@@ -120,7 +126,7 @@ export function CheckoutPage() {
       customer_phone: form.customer_phone.trim(),
       customer_email: form.customer_email.trim() || undefined,
       delivery_type: delivery,
-      delivery_address: delivery === 'domicilio' ? form.delivery_address.trim() : undefined,
+      delivery_address: delivery === 'delivery' ? form.delivery_address.trim() : undefined,
       notes: form.notes.trim() || undefined,
       items: items.map((item) => ({
         product_id: item.id,
@@ -242,24 +248,24 @@ export function CheckoutPage() {
               Método de entrega
             </h2>
             <div className={cn(dmSans.className, 'flex gap-3')}>
-              {(['recogida', 'domicilio'] as const).map((opt) => (
+              {DELIVERY_OPTIONS.map((option) => (
                 <button
                   type="button"
-                  key={opt}
-                  onClick={() => setDelivery(opt)}
+                  key={option.value}
+                  onClick={() => setDelivery(option.value)}
                   className={cn(
                     'flex-1 rounded-lg border py-2.5 text-sm font-medium transition-colors',
-                    delivery === opt
+                    delivery === option.value
                       ? 'border-[#0F0F0D] bg-[#0F0F0D] text-[#FAFAF8]'
                       : 'border-[#E2DDD6] bg-white text-[#6E6E67] hover:border-[#0F0F0D]'
                   )}
                 >
-                  {opt === 'recogida' ? 'Recoger en tienda' : 'Envío a domicilio'}
+                  {option.label}
                 </button>
               ))}
             </div>
 
-            {delivery === 'domicilio' && (
+            {delivery === 'delivery' && (
               <div className="space-y-1.5">
                 <Label className={dmSans.className} htmlFor="address">
                   Dirección de entrega *

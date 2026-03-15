@@ -15,7 +15,25 @@ type OrderStats = {
 }
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : 'Error desconocido'
+  if (error instanceof Error) {
+    return error.message
+  }
+
+  if (typeof error === 'object' && error !== null) {
+    const message = Reflect.get(error, 'message')
+    const details = Reflect.get(error, 'details')
+    const hint = Reflect.get(error, 'hint')
+    const code = Reflect.get(error, 'code')
+    const parts = [message, details, hint, code].filter(
+      (value): value is string => typeof value === 'string' && value.length > 0
+    )
+
+    if (parts.length > 0) {
+      return parts.join(' | ')
+    }
+  }
+
+  return 'Error desconocido'
 }
 
 /** Creates an order and its items using consecutive inserts. */

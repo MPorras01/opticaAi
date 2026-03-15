@@ -30,6 +30,7 @@ export type OrderWithItems = Order & {
   order_items: OrderItem[]
 }
 export type OrderInsert = TablesInsert<'orders'>
+export type OrderDeliveryType = 'pickup' | 'delivery'
 export type OrderStatus =
   | 'pending'
   | 'confirmed'
@@ -48,7 +49,7 @@ export interface CreateOrderInput {
     lens_type?: OrderItem['lens_type']
     lens_notes?: OrderItem['lens_notes']
   }>
-  delivery_type: Order['delivery_type']
+  delivery_type: OrderDeliveryType
   delivery_address?: Order['delivery_address']
   notes?: Order['notes']
   customer_name: Order['customer_name']
