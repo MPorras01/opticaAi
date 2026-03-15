@@ -101,11 +101,14 @@ export function LensConfiguratorModal({
 
   return (
     <Sheet open={open} onOpenChange={(nextOpen) => !nextOpen && handleClose()}>
-      <SheetContent side="right" className="w-full overflow-y-auto bg-[#FAFAF8] p-0 sm:max-w-lg">
+      <SheetContent
+        side="right"
+        className="w-full overflow-y-auto bg-[#FAFAF8] p-0 sm:max-w-4xl xl:max-w-5xl"
+      >
         <div className={`${dmSans.className} min-h-full text-[#0F0F0D]`}>
-          <SheetHeader className="border-b border-[#E9E5DE] bg-[#FAFAF8] pb-4">
+          <SheetHeader className="border-b border-[#E9E5DE] bg-[#FAFAF8] px-5 pb-5 md:px-7">
             <SheetTitle
-              className={`${playfairDisplay.className} text-2xl font-semibold text-[#0F0F0D]`}
+              className={`${playfairDisplay.className} text-2xl font-semibold text-[#0F0F0D] md:text-3xl`}
             >
               Configuración de pedido
             </SheetTitle>
@@ -132,9 +135,9 @@ export function LensConfiguratorModal({
             </div>
           </SheetHeader>
 
-          <div className="p-4">
+          <div className="p-5 md:p-7">
             {step === 1 ? (
-              <div className="space-y-4">
+              <div className="space-y-6">
                 <LensConfigurator
                   lensOptions={lensOptions}
                   basePrice={basePrice}
@@ -153,7 +156,7 @@ export function LensConfiguratorModal({
             ) : null}
 
             {step === 2 ? (
-              <div className="space-y-4">
+              <div className="space-y-6">
                 <Button
                   type="button"
                   variant="outline"
@@ -174,7 +177,7 @@ export function LensConfiguratorModal({
             ) : null}
 
             {step === 3 && selectedLens && prescription ? (
-              <div className="space-y-5">
+              <div className="space-y-6">
                 <section className="rounded-xl border border-[#E5E2DC] bg-white p-4">
                   <div className="flex items-center gap-3">
                     <div className="relative size-16 overflow-hidden rounded-lg border border-[#E6E1D8] bg-[#F3EFE6]">

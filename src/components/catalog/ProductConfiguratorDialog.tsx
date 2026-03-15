@@ -185,9 +185,9 @@ export function ProductConfiguratorDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={trigger} />
-      <DialogContent className="max-h-[92vh] max-w-[1180px] overflow-y-auto rounded-[28px] border border-[#E2DDD6] bg-[#FAFAF8] p-0">
-        <div className="grid gap-0 lg:grid-cols-[1.05fr_0.95fr]">
-          <section className="border-b border-[#E2DDD6] bg-[#F4EFE6] p-5 lg:border-r lg:border-b-0 lg:p-6">
+      <DialogContent className="max-h-[95vh] max-w-[1380px] overflow-y-auto rounded-[32px] border border-[#E2DDD6] bg-[#FAFAF8] p-0">
+        <div className="grid gap-0 lg:grid-cols-[minmax(480px,1.05fr)_minmax(560px,0.95fr)] xl:grid-cols-[minmax(540px,1.1fr)_minmax(620px,0.9fr)]">
+          <section className="border-b border-[#E2DDD6] bg-[#F4EFE6] p-6 lg:border-r lg:border-b-0 lg:p-8">
             <div className="relative aspect-square overflow-hidden rounded-[24px] border border-[#E2DDD6] bg-white">
               <Image
                 src={selectedImage}
@@ -199,7 +199,7 @@ export function ProductConfiguratorDialog({
             </div>
 
             {images.length > 1 && (
-              <div className="mt-4 flex gap-3 overflow-x-auto pb-1">
+              <div className="mt-5 flex gap-3 overflow-x-auto pb-1">
                 {images.map((image) => (
                   <button
                     key={image}
@@ -223,7 +223,7 @@ export function ProductConfiguratorDialog({
             )}
           </section>
 
-          <section className="p-5 lg:p-6">
+          <section className="p-6 lg:p-8">
             <DialogHeader className="space-y-3">
               <p
                 className={
@@ -244,25 +244,26 @@ export function ProductConfiguratorDialog({
               </DialogDescription>
               <div
                 className={
-                  playfairDisplay.className + ' text-3xl font-semibold text-[#0F0F0D] italic'
+                  playfairDisplay.className +
+                  ' text-3xl font-semibold text-[#0F0F0D] italic md:text-4xl'
                 }
               >
                 {formatCOP(product.price)}
               </div>
             </DialogHeader>
 
-            <div className="mt-6 space-y-6">
+            <div className="mt-8 space-y-8">
               <section className="space-y-3">
                 <h3 className={dmSans.className + ' text-sm font-semibold text-[#0F0F0D]'}>
                   Tipo de lente
                 </h3>
-                <div className="grid gap-2 sm:grid-cols-2">
+                <div className="grid gap-3 sm:grid-cols-2">
                   {LENS_TYPES.map((option) => (
                     <button
                       key={option}
                       type="button"
                       onClick={() => setLensType(option)}
-                      className={`rounded-2xl border px-4 py-3 text-left text-sm transition ${
+                      className={`rounded-2xl border px-4 py-4 text-left text-sm transition ${
                         lensType === option
                           ? 'border-[#0F0F0D] bg-[#0F0F0D] text-[#FAFAF8]'
                           : 'border-[#E2DDD6] bg-white text-[#3E3E38] hover:border-[#0F0F0D]'
@@ -280,11 +281,11 @@ export function ProductConfiguratorDialog({
                     <h3 className={dmSans.className + ' text-sm font-semibold text-[#0F0F0D]'}>
                       Filtros y tratamientos disponibles
                     </h3>
-                    <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="grid gap-4 sm:grid-cols-2">
                       {LENS_FILTERS.map((filter) => (
                         <label
                           key={filter}
-                          className="flex items-center gap-3 rounded-2xl border border-[#E2DDD6] bg-white px-4 py-3 text-sm text-[#3E3E38]"
+                          className="flex items-center gap-3 rounded-2xl border border-[#E2DDD6] bg-white px-4 py-4 text-sm text-[#3E3E38]"
                         >
                           <Checkbox
                             checked={lensFilters.includes(filter)}
@@ -296,12 +297,12 @@ export function ProductConfiguratorDialog({
                     </div>
                   </section>
 
-                  <section className="space-y-4 rounded-3xl border border-[#E2DDD6] bg-white p-5">
+                  <section className="space-y-5 rounded-3xl border border-[#E2DDD6] bg-white p-6">
                     <div className="space-y-2">
                       <h3 className={dmSans.className + ' text-sm font-semibold text-[#0F0F0D]'}>
                         Fórmula oftálmica
                       </h3>
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap gap-3">
                         <button
                           type="button"
                           onClick={() =>
@@ -350,8 +351,8 @@ export function ProductConfiguratorDialog({
                     </div>
 
                     {prescription.mode === 'manual' ? (
-                      <div className="space-y-4">
-                        <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-5">
+                        <div className="grid gap-5 md:grid-cols-2">
                           <div className="space-y-3 rounded-2xl border border-[#ECE5D8] bg-[#FCFBF8] p-4">
                             <p
                               className={dmSans.className + ' text-sm font-semibold text-[#0F0F0D]'}
@@ -451,7 +452,7 @@ export function ProductConfiguratorDialog({
                           </div>
                         </div>
 
-                        <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="grid gap-4 sm:grid-cols-2">
                           <div className="space-y-1.5">
                             <Label htmlFor="pd" className={dmSans.className}>
                               Distancia pupilar (PD)
@@ -521,7 +522,7 @@ export function ProductConfiguratorDialog({
                         </label>
                       </div>
                     ) : prescription.mode === 'upload' ? (
-                      <div className="space-y-4">
+                      <div className="space-y-5">
                         <div className="space-y-1.5">
                           <Label htmlFor="prescription-upload" className={dmSans.className}>
                             Imagen de la fórmula
@@ -603,7 +604,7 @@ export function ProductConfiguratorDialog({
                 </>
               )}
 
-              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#E2DDD6] pt-2">
+              <div className="flex flex-wrap items-center justify-between gap-4 border-t border-[#E2DDD6] pt-4">
                 <div className={dmSans.className + ' text-sm text-[#66665F]'}>
                   {lensType === 'sin-lente'
                     ? 'Comprar solo montura'
@@ -613,7 +614,7 @@ export function ProductConfiguratorDialog({
                   onClick={handleAddToCart}
                   className={
                     dmSans.className +
-                    ' h-11 rounded-full bg-[#D4A853] px-6 text-sm font-semibold text-[#0F0F0D] hover:bg-[#C79D4C]'
+                    ' h-11 min-w-[240px] rounded-full bg-[#D4A853] px-6 text-sm font-semibold text-[#0F0F0D] hover:bg-[#C79D4C]'
                   }
                 >
                   Guardar y agregar al carrito

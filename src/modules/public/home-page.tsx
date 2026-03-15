@@ -93,13 +93,22 @@ export async function HomePage() {
               <div className="relative aspect-[4/5] overflow-hidden rounded-[1.5rem] border border-[#E2DDD6]/70 bg-[#EFEAE0]">
                 <Image
                   src="/placeholder.svg"
-                  alt="Placeholder para imagen del hero"
+                  alt="Guía visual para subir tu foto"
                   fill
-                  className="object-cover opacity-35"
+                  className="object-cover opacity-70"
                   sizes="(min-width: 768px) 430px, 100vw"
                 />
-                <div className={cn(dmSans.className, 'absolute inset-0 flex items-center justify-center text-xl font-medium')}>
-                  Tu foto aqui
+                <div className="absolute inset-0 bg-gradient-to-t from-[#0F0F0D]/18 via-transparent to-transparent" />
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-8 text-center">
+                  <div className="rounded-full border border-[#D4A853]/60 bg-white/80 px-4 py-1.5 text-xs font-semibold tracking-[0.18em] text-[#8A6A2F] uppercase backdrop-blur">
+                    Probador virtual
+                  </div>
+                  <div className={cn(playfairDisplay.className, 'text-3xl font-semibold text-[#0F0F0D]')}>
+                    Tu foto aquí
+                  </div>
+                  <p className={cn(dmSans.className, 'max-w-[16rem] text-sm leading-6 text-[#4B4B44]')}>
+                    Sube una selfie frontal y prueba monturas en segundos.
+                  </p>
                 </div>
               </div>
             </div>
