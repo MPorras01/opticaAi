@@ -1,11 +1,14 @@
 import type { Metadata } from 'next'
 
 import { siteConfig } from '@/config/site.config'
-import { findProductBySlug, getProducts, getRelatedProducts } from '@/lib/repositories'
+import { findProductBySlug, getRelatedProducts } from '@/lib/repositories'
 import { getLensOptions } from '@/lib/repositories/lens-options.repo'
 import { createClient } from '@/lib/supabase/server'
 import { ProductDetail } from '@/modules/public/product-detail'
 import ProductNotFound from './not-found'
+
+// Force dynamic rendering so cookies() always has request context on Vercel
+export const dynamic = 'force-dynamic'
 
 type Params = Promise<{ slug: string }>
 
@@ -30,16 +33,6 @@ function buildProductDescription(description: string | null) {
   }
 
   return description
-}
-
-export async function generateStaticParams() {
-  try {
-    const products = await getProducts()
-
-    return products.map((product) => ({ slug: product.slug }))
-  } catch {
-    return []
-  }
 }
 
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
