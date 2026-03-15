@@ -27,6 +27,8 @@ type GlassesOverlayProps = {
 
 const LEFT_IRIS_CENTER_INDEX = 468
 const RIGHT_IRIS_CENTER_INDEX = 473
+const TEMPORAL_PREVIOUS_WEIGHT = 0.85
+const TEMPORAL_CURRENT_WEIGHT = 0.15
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value))
@@ -51,6 +53,13 @@ export function GlassesOverlay({
     forceDebug,
   })
   const loadedImageRef = useRef<HTMLCanvasElement | null>(null)
+  const smoothedTransformRef = useRef<{
+    centerX: number
+    centerY: number
+    width: number
+    height: number
+    rotation: number
+  } | null>(null)
 
   useEffect(() => {
     landmarksRef.current = landmarks
@@ -74,6 +83,7 @@ export function GlassesOverlay({
     loadGlassesImage()
     return () => {
       active = false
+      smoothedTransformRef.current = null
     }
   }, [glassesImageUrl])
 
@@ -143,16 +153,7 @@ export function GlassesOverlay({
         const rightIrisLm = currentLandmarks[RIGHT_IRIS_CENTER_INDEX]
         const leftIris = leftIrisLm ? toPixels(leftIrisLm, W, H) : leftEyeOuter
         const rightIris = rightIrisLm ? toPixels(rightIrisLm, W, H) : rightEyeOuter
-        const leftEyebrowInner = toPixels(
-          currentLandmarks[LANDMARK_INDICES.LEFT_EYEBROW_INNER],
-          W,
-          H
-        )
-        const rightEyebrowInner = toPixels(
-          currentLandmarks[LANDMARK_INDICES.RIGHT_EYEBROW_INNER],
-          W,
-          H
-        )
+
         const noseBridge = currentLandmarks[LANDMARK_INDICES.NOSE_BRIDGE_TOP]
         const noseBridgeZ = typeof noseBridge?.z === 'number' ? noseBridge.z : 0
         const leftTempleZ =
@@ -164,38 +165,58 @@ export function GlassesOverlay({
             ? (currentLandmarks[LANDMARK_INDICES.RIGHT_TEMPLE]?.z ?? 0)
             : 0
 
-        const irisDistance = distance(leftIris, rightIris)
+        const irisDistance = Math.max(distance(leftIris, rightIris), 1)
         const templeDistance = Math.max(distance(leftTemple, rightTemple), 1)
-        const templeCenterX = (leftTemple.x + rightTemple.x) / 2
-        const templeCenterY = (leftTemple.y + rightTemple.y) / 2
-
-        // Head orientation from temples + nose bridge.
-        const roll = angleBetween(leftTemple, rightTemple)
-        const yaw = clamp((noseBridgeTop.x - templeCenterX) / templeDistance, -1, 1)
-        const pitch = clamp((noseBridgeTop.y - templeCenterY) / (templeDistance * 0.6), -1, 1)
+        const roll = angleBetween(leftIris, rightIris)
+        const irisMidX = (leftIris.x + rightIris.x) / 2
+        const irisMidY = (leftIris.y + rightIris.y) / 2
 
         const depthZ = (noseBridgeZ + leftTempleZ + rightTempleZ) / 3
-        const depthScale = 1 + depthZ * -0.35
-        const clampedDepthScale = clamp(depthScale, 0.72, 1.35)
+        const depthScale = clamp(1 + depthZ * -0.28, 0.86, 1.2)
 
-        const glassesWidth = irisDistance * 2.8 * props.fitProfile.widthFactor
-        const yawScale = 1 - Math.abs(yaw) * 0.08
-        const finalWidth = glassesWidth * clampedDepthScale * yawScale
+        // Use iris as primary scale and blend with temples for better face-width realism.
+        const irisBasedWidth = irisDistance * 2.2 * props.fitProfile.widthFactor
+        const templeBasedWidth = templeDistance * 0.78 * props.fitProfile.widthFactor
+        const rawWidth = (irisBasedWidth * 0.75 + templeBasedWidth * 0.25) * depthScale
+        const clampedWidth = clamp(rawWidth, irisDistance * 1.9, templeDistance * 0.9)
 
-        const centerX = (leftIris.x + rightIris.x) / 2 + yaw * (irisDistance * 0.22)
+        // Keep pivot exactly on eye midpoint and lower glasses slightly to sit naturally on eyes/nose.
+        const rawCenterX = irisMidX
+        const verticalDrop = irisDistance * 0.13
+        const noseInfluenceY = (noseBridgeTop.y - irisMidY) * 0.18
+        const rawCenterY =
+          irisMidY + verticalDrop + noseInfluenceY + H * props.fitProfile.verticalOffset
 
-        const eyeCenterY = (leftIris.y + rightIris.y) / 2
-        const browCenterY = (leftEyebrowInner.y + rightEyebrowInner.y) / 2
-        const browToEye = eyeCenterY - browCenterY
-        const bridgeInfluence = clamp(0.15 + props.fitProfile.bridgeOffset * 0.6, -0.1, 0.35)
-        const centerY =
-          eyeCenterY +
-          browToEye * bridgeInfluence +
-          pitch * (irisDistance * 0.12) +
-          H * props.fitProfile.verticalOffset
+        const rawHeight = clampedWidth * props.fitProfile.heightFactor
 
-        const finalHeight = finalWidth * props.fitProfile.heightFactor
-        const angle = roll
+        const previousTransform = smoothedTransformRef.current
+        const finalCenterX = previousTransform
+          ? previousTransform.centerX * TEMPORAL_PREVIOUS_WEIGHT +
+            rawCenterX * TEMPORAL_CURRENT_WEIGHT
+          : rawCenterX
+        const finalCenterY = previousTransform
+          ? previousTransform.centerY * TEMPORAL_PREVIOUS_WEIGHT +
+            rawCenterY * TEMPORAL_CURRENT_WEIGHT
+          : rawCenterY
+        const finalWidth = previousTransform
+          ? previousTransform.width * TEMPORAL_PREVIOUS_WEIGHT +
+            clampedWidth * TEMPORAL_CURRENT_WEIGHT
+          : clampedWidth
+        const finalHeight = previousTransform
+          ? previousTransform.height * TEMPORAL_PREVIOUS_WEIGHT +
+            rawHeight * TEMPORAL_CURRENT_WEIGHT
+          : rawHeight
+        const finalRotation = previousTransform
+          ? previousTransform.rotation * TEMPORAL_PREVIOUS_WEIGHT + roll * TEMPORAL_CURRENT_WEIGHT
+          : roll
+
+        smoothedTransformRef.current = {
+          centerX: finalCenterX,
+          centerY: finalCenterY,
+          width: finalWidth,
+          height: finalHeight,
+          rotation: finalRotation,
+        }
 
         const processedPng = loadedImageRef.current
 
@@ -204,11 +225,11 @@ export function GlassesOverlay({
           if (props.isFlipped) {
             ctx.translate(W, 0)
             ctx.scale(-1, 1)
-            ctx.translate(centerX, centerY)
+            ctx.translate(finalCenterX, finalCenterY)
           } else {
-            ctx.translate(centerX, centerY)
+            ctx.translate(finalCenterX, finalCenterY)
           }
-          ctx.rotate(angle)
+          ctx.rotate(finalRotation)
 
           const drawWidth = Math.max(1, Math.round(finalWidth))
           const drawHeight = Math.max(1, Math.round(finalHeight))
@@ -268,8 +289,8 @@ export function GlassesOverlay({
           ctx.fillRect(8, 8, 200, 62)
           ctx.fillStyle = '#C2FF8A'
           ctx.font = '11px monospace'
-          ctx.fillText(`yaw: ${yaw.toFixed(3)}`, 14, 26)
-          ctx.fillText(`pitch: ${pitch.toFixed(3)}`, 14, 40)
+          ctx.fillText('yaw: iris-based', 14, 26)
+          ctx.fillText('pitch: iris-based', 14, 40)
           ctx.fillText(`roll: ${roll.toFixed(3)}`, 14, 54)
         }
       } finally {
