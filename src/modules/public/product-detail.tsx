@@ -4,12 +4,15 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { DM_Sans, Playfair_Display } from 'next/font/google'
 import { useMemo, useState } from 'react'
+import { toast } from 'sonner'
 
-import { ProductConfiguratorDialog } from '@/components/catalog/ProductConfiguratorDialog'
+import { LensConfiguratorModal } from '@/components/checkout/LensConfiguratorModal'
 import { ProductCard } from '@/components/catalog/ProductCard'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import type { LensOption } from '@/lib/repositories/lens-options.repo'
 import { formatCOP } from '@/lib/utils'
 import type { Product, ProductWithCategory } from '@/types'
+import useCartStore from '@/stores/cart.store'
 
 const dmSans = DM_Sans({
   subsets: ['latin'],
@@ -26,9 +29,20 @@ type ProductDetailProps = {
   product: ProductWithCategory
   relatedProducts: Product[]
   whatsappHref: string
+  lensOptions: LensOption[]
+  isLoggedIn?: boolean
 }
 
-export function ProductDetail({ product, relatedProducts, whatsappHref }: ProductDetailProps) {
+export function ProductDetail({
+  product,
+  relatedProducts,
+  whatsappHref,
+  lensOptions,
+  isLoggedIn = false,
+}: ProductDetailProps) {
+  const addItem = useCartStore((state) => state.addItem)
+  const openCart = useCartStore((state) => state.openCart)
+
   const images = useMemo(() => {
     if (product.images.length > 0) {
       return product.images
@@ -38,6 +52,7 @@ export function ProductDetail({ product, relatedProducts, whatsappHref }: Produc
   }, [product.images])
 
   const [selectedImage, setSelectedImage] = useState(images[0])
+  const [isLensModalOpen, setIsLensModalOpen] = useState(false)
 
   const attributes = [
     { label: 'Material', value: product.material },
@@ -125,20 +140,40 @@ export function ProductDetail({ product, relatedProducts, whatsappHref }: Produc
             )}
 
             <div className="space-y-2.5 pt-2">
-              <ProductConfiguratorDialog
-                product={product}
-                initialImage={selectedImage}
-                trigger={
-                  <button
-                    type="button"
-                    className={
-                      dmSans.className +
-                      ' inline-flex h-11 w-full items-center justify-center rounded-full bg-[#D4A853] text-sm font-semibold text-[#0F0F0D] transition duration-300 hover:scale-[1.02] hover:bg-[#C79D4C]'
-                    }
-                  >
-                    Personalizar y agregar
-                  </button>
+              <button
+                type="button"
+                onClick={() => setIsLensModalOpen(true)}
+                className={
+                  dmSans.className +
+                  ' inline-flex h-11 w-full items-center justify-center rounded-full bg-[#D4A853] text-sm font-semibold text-[#0F0F0D] transition duration-300 hover:scale-[1.02] hover:bg-[#C79D4C]'
                 }
+              >
+                Personalizar y agregar
+              </button>
+
+              <LensConfiguratorModal
+                product={product}
+                lensOptions={lensOptions}
+                open={isLensModalOpen}
+                onClose={() => setIsLensModalOpen(false)}
+                isLoggedIn={isLoggedIn}
+                onConfirm={(config) => {
+                  addItem({
+                    id: product.id,
+                    name: product.name,
+                    slug: product.slug,
+                    price: config.totalPrice,
+                    image: selectedImage,
+                    lensType: undefined,
+                    lensFilters: [],
+                    prescription: config.prescription,
+                    lensSelection: config.lensOptions,
+                  })
+
+                  toast.success('Producto agregado con configuración personalizada')
+                  setIsLensModalOpen(false)
+                  openCart()
+                }}
               />
 
               {product.has_ar_overlay && (

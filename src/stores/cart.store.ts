@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
 import { buildCartItemSignature } from '@/lib/utils/lens-config'
+import type { AdvancedLensSelection } from '@/lib/utils/lens-config'
 import type { LensFilterOption, LensType, PrescriptionData } from '@/types'
 
 export type CartItem = {
@@ -16,6 +17,7 @@ export type CartItem = {
   lensType?: LensType
   lensFilters?: LensFilterOption[]
   prescription?: PrescriptionData | null
+  lensSelection?: AdvancedLensSelection
 }
 
 type CartStore = {

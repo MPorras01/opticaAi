@@ -20,7 +20,7 @@ import {
 } from '@/lib/utils/lens-config'
 import { cn } from '@/lib/utils'
 import useCartStore from '@/stores/cart.store'
-import type { OrderDeliveryType } from '@/types'
+import type { LensType, OrderDeliveryType } from '@/types'
 
 const dmSans = DM_Sans({ subsets: ['latin'], weight: ['400', '500', '600'] })
 const playfairDisplay = Playfair_Display({
@@ -42,6 +42,13 @@ function formatCOP(value: number) {
     currency: 'COP',
     maximumFractionDigits: 0,
   }).format(value)
+}
+
+function normalizeLensType(value?: string): LensType | undefined {
+  if (!value) return undefined
+
+  const allowed: LensType[] = ['sin-lente', 'monofocal', 'bifocal', 'progresivo', 'solar']
+  return allowed.includes(value as LensType) ? (value as LensType) : undefined
 }
 
 export function CheckoutPage() {
@@ -87,9 +94,21 @@ export function CheckoutPage() {
       .map(
         (item) => {
           const extras = [
-            item.lensType ? LENS_TYPE_LABELS[item.lensType] : null,
-            item.lensFilters?.length
-              ? `Filtros: ${item.lensFilters.map((filter) => LENS_FILTER_LABELS[filter]).join(', ')}`
+            item.lensSelection?.type
+              ? `Lente: ${item.lensSelection.type}`
+              : item.lensType
+                ? LENS_TYPE_LABELS[item.lensType]
+                : null,
+            item.lensSelection?.material ? `Material: ${item.lensSelection.material}` : null,
+            item.lensSelection?.filters?.length
+              ? `Filtros: ${item.lensSelection.filters.join(', ')}`
+              : item.lensFilters?.length
+                ? `Filtros: ${item.lensFilters.map((filter) => LENS_FILTER_LABELS[filter]).join(', ')}`
+                : null,
+            item.lensSelection?.tint ? `Tinte: ${item.lensSelection.tint}` : null,
+            item.lensSelection?.thickness ? `Grosor: ${item.lensSelection.thickness}` : null,
+            item.lensSelection?.totalAddition
+              ? `Opciones: ${formatCOP(item.lensSelection.totalAddition)}`
               : null,
             item.prescription?.mode === 'manual' && hasPrescriptionDetails(item.prescription)
               ? 'Formula registrada'
@@ -145,8 +164,10 @@ export function CheckoutPage() {
         product_image: item.image,
         quantity: item.quantity,
         unit_price: item.price,
-        lens_type: item.lensType,
-        lens_filters: item.lensFilters,
+        lens_type: normalizeLensType(item.lensSelection?.type) ?? item.lensType,
+        lens_filters: (item.lensSelection?.filters ?? item.lensFilters ?? []) as Array<
+          'blue-light' | 'photochromic' | 'anti-reflective' | 'uv-protection' | 'polarized'
+        >,
         prescription: item.prescription,
         lens_notes: serializeLensNotes(item),
       })),

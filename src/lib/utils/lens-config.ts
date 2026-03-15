@@ -1,16 +1,32 @@
 import type { LensFilterOption, LensType, PrescriptionData, PrescriptionEyeValues } from '@/types'
 
+export type AdvancedLensSelection = {
+  type?: string
+  typeId?: string
+  material?: string
+  materialId?: string
+  filters: string[]
+  filterIds: string[]
+  tint?: string
+  tintId?: string
+  thickness?: string
+  thicknessId?: string
+  totalAddition: number
+}
+
 type LensConfigShape = {
   id: string
   lensType?: LensType
   lensFilters?: LensFilterOption[]
   prescription?: PrescriptionData | null
+  lensSelection?: AdvancedLensSelection
 }
 
 type SerializedLensNotes = {
   version: 1
   lensFilters: LensFilterOption[]
   prescription: PrescriptionData | null
+  lensSelection?: AdvancedLensSelection
 }
 
 export const LENS_TYPE_LABELS: Record<LensType, string> = {
@@ -90,6 +106,15 @@ export function buildCartItemSignature(item: LensConfigShape) {
     id: item.id,
     lensType: item.lensType ?? 'sin-lente',
     lensFilters: [...(item.lensFilters ?? [])].sort(),
+    lensSelection: item.lensSelection
+      ? {
+          typeId: item.lensSelection.typeId,
+          materialId: item.lensSelection.materialId,
+          filterIds: [...(item.lensSelection.filterIds ?? [])].sort(),
+          tintId: item.lensSelection.tintId,
+          thicknessId: item.lensSelection.thicknessId,
+        }
+      : null,
     prescription: normalizePrescriptionData(item.prescription),
   })
 }
@@ -99,9 +124,10 @@ export function serializeLensNotes(item: LensConfigShape) {
     version: 1,
     lensFilters: [...(item.lensFilters ?? [])].sort(),
     prescription: normalizePrescriptionData(item.prescription),
+    lensSelection: item.lensSelection,
   }
 
-  if (payload.lensFilters.length === 0 && !payload.prescription) {
+  if (payload.lensFilters.length === 0 && !payload.prescription && !payload.lensSelection) {
     return undefined
   }
 
@@ -126,6 +152,57 @@ export function parseLensNotes(lensNotes?: string | null): SerializedLensNotes |
         ? parsed.lensFilters.filter((value): value is LensFilterOption => typeof value === 'string')
         : [],
       prescription: normalizePrescriptionData(parsed.prescription ?? null),
+      lensSelection:
+        parsed.lensSelection && typeof parsed.lensSelection === 'object'
+          ? {
+              type:
+                typeof parsed.lensSelection.type === 'string'
+                  ? parsed.lensSelection.type
+                  : undefined,
+              typeId:
+                typeof parsed.lensSelection.typeId === 'string'
+                  ? parsed.lensSelection.typeId
+                  : undefined,
+              material:
+                typeof parsed.lensSelection.material === 'string'
+                  ? parsed.lensSelection.material
+                  : undefined,
+              materialId:
+                typeof parsed.lensSelection.materialId === 'string'
+                  ? parsed.lensSelection.materialId
+                  : undefined,
+              filters: Array.isArray(parsed.lensSelection.filters)
+                ? parsed.lensSelection.filters.filter(
+                    (value): value is string => typeof value === 'string'
+                  )
+                : [],
+              filterIds: Array.isArray(parsed.lensSelection.filterIds)
+                ? parsed.lensSelection.filterIds.filter(
+                    (value): value is string => typeof value === 'string'
+                  )
+                : [],
+              tint:
+                typeof parsed.lensSelection.tint === 'string'
+                  ? parsed.lensSelection.tint
+                  : undefined,
+              tintId:
+                typeof parsed.lensSelection.tintId === 'string'
+                  ? parsed.lensSelection.tintId
+                  : undefined,
+              thickness:
+                typeof parsed.lensSelection.thickness === 'string'
+                  ? parsed.lensSelection.thickness
+                  : undefined,
+              thicknessId:
+                typeof parsed.lensSelection.thicknessId === 'string'
+                  ? parsed.lensSelection.thicknessId
+                  : undefined,
+              totalAddition:
+                typeof parsed.lensSelection.totalAddition === 'number'
+                  ? parsed.lensSelection.totalAddition
+                  : 0,
+            }
+          : undefined,
     }
   } catch {
     return null

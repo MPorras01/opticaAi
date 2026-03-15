@@ -38,9 +38,21 @@ function CartRow({ item }: { item: CartItem }) {
   const cartItemKey = item.cartItemId ?? item.id
 
   const configLines = [
-    item.lensType ? `Lente: ${LENS_TYPE_LABELS[item.lensType]}` : null,
-    item.lensFilters?.length
-      ? `Filtros: ${item.lensFilters.map((filter) => LENS_FILTER_LABELS[filter]).join(', ')}`
+    item.lensSelection?.type
+      ? `Lente: ${item.lensSelection.type}`
+      : item.lensType
+        ? `Lente: ${LENS_TYPE_LABELS[item.lensType]}`
+        : null,
+    item.lensSelection?.filters?.length
+      ? `Filtros: ${item.lensSelection.filters.join(', ')}`
+      : item.lensFilters?.length
+        ? `Filtros: ${item.lensFilters.map((filter) => LENS_FILTER_LABELS[filter]).join(', ')}`
+        : null,
+    item.lensSelection?.material ? `Material: ${item.lensSelection.material}` : null,
+    item.lensSelection?.tint ? `Tinte: ${item.lensSelection.tint}` : null,
+    item.lensSelection?.thickness ? `Grosor: ${item.lensSelection.thickness}` : null,
+    item.lensSelection?.totalAddition
+      ? `Opciones: ${formatCOP(item.lensSelection.totalAddition)}`
       : null,
     item.prescription?.mode === 'manual' && hasPrescriptionDetails(item.prescription)
       ? 'Formula registrada'

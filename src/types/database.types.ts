@@ -38,6 +38,42 @@ export type Database = {
         }
         Relationships: []
       }
+      lens_options: {
+        Row: {
+          category: string
+          created_at: string | null
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          price_addition: number
+          sort_order: number
+          updated_at: string | null
+        }
+        Insert: {
+          category: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          price_addition?: number
+          sort_order?: number
+          updated_at?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          price_addition?: number
+          sort_order?: number
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       order_items: {
         Row: {
           id: string
