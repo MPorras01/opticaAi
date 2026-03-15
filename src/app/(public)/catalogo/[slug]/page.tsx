@@ -1,11 +1,11 @@
 import type { Metadata } from 'next'
-import { notFound } from 'next/navigation'
 
 import { siteConfig } from '@/config/site.config'
 import { findProductBySlug, getProducts, getRelatedProducts } from '@/lib/repositories'
 import { getLensOptions } from '@/lib/repositories/lens-options.repo'
 import { createClient } from '@/lib/supabase/server'
 import { ProductDetail } from '@/modules/public/product-detail'
+import ProductNotFound from './not-found'
 
 type Params = Promise<{ slug: string }>
 
@@ -66,7 +66,7 @@ export default async function ProductDetailRoute({ params }: { params: Params })
   const productResult = await findProductBySlug(slug).catch(() => null)
 
   if (!productResult) {
-    notFound()
+    return <ProductNotFound />
   }
 
   const product = !productResult.images?.length
@@ -84,10 +84,13 @@ export default async function ProductDetailRoute({ params }: { params: Params })
   const whatsappMessage = `${siteConfig.whatsapp.message} Me interesa: ${product.name}`
   const whatsappHref = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(whatsappMessage)}`
 
-  const [lensOptions, supabase] = await Promise.all([getLensOptions(), createClient()])
+  const [lensOptions, supabase] = await Promise.all([
+    getLensOptions().catch(() => []),
+    createClient(),
+  ])
   const {
     data: { user },
-  } = await supabase.auth.getUser()
+  } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }))
 
   return (
     <ProductDetail
