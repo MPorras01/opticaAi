@@ -1,6 +1,7 @@
 'use client'
 
 import Image from 'next/image'
+import Link from 'next/link'
 import { DM_Sans, Playfair_Display } from 'next/font/google'
 import { Check, Plus } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
@@ -129,20 +130,32 @@ export function ProductCard({ product, priority = false }: ProductCardProps) {
         </div>
 
         <div className="flex items-center gap-2 pt-1">
-          <ProductConfiguratorDialog
-            product={product}
-            trigger={
-              <button
-                type="button"
-                className={
-                  dmSans.className +
-                  ' inline-flex h-9 flex-1 items-center justify-center rounded-full border border-[#D4A853] bg-white px-4 text-sm font-semibold text-[#8A6A2F] transition hover:bg-[#FFF6E5]'
-                }
-              >
-                Ver detalle
-              </button>
+          <div className="flex-1 lg:hidden">
+            <ProductConfiguratorDialog
+              product={product}
+              trigger={
+                <button
+                  type="button"
+                  className={
+                    dmSans.className +
+                    ' inline-flex h-9 w-full items-center justify-center rounded-full border border-[#D4A853] bg-white px-4 text-sm font-semibold text-[#8A6A2F] transition hover:bg-[#FFF6E5]'
+                  }
+                >
+                  Ver detalle
+                </button>
+              }
+            />
+          </div>
+
+          <Link
+            href={`/catalogo/${product.slug}`}
+            className={
+              dmSans.className +
+              ' hidden h-9 flex-1 items-center justify-center rounded-full border border-[#D4A853] bg-white px-4 text-sm font-semibold text-[#8A6A2F] transition hover:bg-[#FFF6E5] lg:inline-flex'
             }
-          />
+          >
+            Ver detalle
+          </Link>
 
           <button
             type="button"
