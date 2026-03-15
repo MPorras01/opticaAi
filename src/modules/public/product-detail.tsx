@@ -44,8 +44,16 @@ export function ProductDetail({
   const openCart = useCartStore((state) => state.openCart)
 
   const images = useMemo(() => {
-    if (product.images.length > 0) {
-      return product.images
+    if (!Array.isArray(product.images)) {
+      return ['/placeholder.svg']
+    }
+
+    const validImages = product.images.filter(
+      (image): image is string => typeof image === 'string' && image.trim().length > 0
+    )
+
+    if (validImages.length > 0) {
+      return validImages
     }
 
     return ['/placeholder.svg']

@@ -12,6 +12,18 @@ type Params = Promise<{ slug: string }>
 const UNSPLASH_FALLBACK_IMAGE =
   'https://images.unsplash.com/photo-1574258495973-f010dfbb5371?w=400&h=400&fit=crop&q=80'
 
+function normalizeProductImages(images: unknown): string[] {
+  if (!Array.isArray(images)) {
+    return [UNSPLASH_FALLBACK_IMAGE]
+  }
+
+  const sanitized = images.filter(
+    (image): image is string => typeof image === 'string' && image.trim().length > 0
+  )
+
+  return sanitized.length > 0 ? sanitized : [UNSPLASH_FALLBACK_IMAGE]
+}
+
 function buildProductDescription(description: string | null) {
   if (!description) {
     return 'Descubre monturas premium en OpticaAI y elige tu mejor estilo con asesoria personalizada.'
@@ -42,7 +54,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
       }
     }
 
-    const image = product.images?.[0] ?? UNSPLASH_FALLBACK_IMAGE
+    const image = normalizeProductImages(product.images)[0]
 
     return {
       title: `${product.name} · OpticaAI`,
@@ -69,12 +81,10 @@ export default async function ProductDetailRoute({ params }: { params: Params })
     return <ProductNotFound />
   }
 
-  const product = !productResult.images?.length
-    ? {
-        ...productResult,
-        images: [UNSPLASH_FALLBACK_IMAGE],
-      }
-    : productResult
+  const product = {
+    ...productResult,
+    images: normalizeProductImages(productResult.images),
+  }
 
   const relatedProducts = product.category_id
     ? await getRelatedProducts(product.id, product.category_id).catch(() => [])
