@@ -12,7 +12,7 @@ export default async function AdminCustomersRoute() {
 
     const { data: profiles } = await supabase
       .from('profiles')
-      .select('id, full_name, phone, created_at')
+      .select('id, full_name, phone, city, address, created_at')
       .eq('role', 'customer')
       .order('created_at', { ascending: false })
 
@@ -31,6 +31,8 @@ export default async function AdminCustomersRoute() {
         id: p.id,
         full_name: p.full_name ?? null,
         phone: p.phone ?? null,
+        city: p.city ?? null,
+        address: p.address ?? null,
         created_at: p.created_at,
         order_count: counts[i],
       }))

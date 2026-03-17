@@ -2,18 +2,21 @@
 
 import { zodResolver } from '@hookform/resolvers/zod'
 import { DM_Sans, Playfair_Display } from 'next/font/google'
+import { useState, useTransition } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 
+import { uploadPrescriptionImageAction } from '@/actions/orders.actions'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
-import type { PrescriptionData, PrescriptionEyeValues } from '@/types'
+import type { PrescriptionData, PrescriptionEyeValues, PrescriptionMode } from '@/types'
 
 type PrescriptionFormProps = {
   onSubmit: (data: PrescriptionData) => void
+  productSlug: string
   defaultValues?: Partial<PrescriptionData>
   isLoggedIn?: boolean
 }
@@ -229,9 +232,16 @@ function EyeColumn({
 
 export function PrescriptionForm({
   onSubmit,
+  productSlug,
   defaultValues,
   isLoggedIn = false,
 }: PrescriptionFormProps) {
+  const [mode, setMode] = useState<PrescriptionMode>(defaultValues?.mode ?? 'manual')
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const [uploadedImagePath, setUploadedImagePath] = useState(defaultValues?.imagePath ?? '')
+  const [uploadedImageName, setUploadedImageName] = useState(defaultValues?.imageFileName ?? '')
+  const [isUploading, startUploadTransition] = useTransition()
+
   const form = useForm<FormValues, undefined, FormSubmitValues>({
     resolver: zodResolver(formSchema),
     defaultValues: mapDefaultValues(defaultValues),
@@ -256,7 +266,7 @@ export function PrescriptionForm({
     }
 
     const payload: PrescriptionData & { saveToAccount?: boolean } = {
-      mode: 'manual',
+      mode,
       rightEye: {
         sphere: toTrimmedOrUndefined(values.rightEye.sphere),
         cylinder: toTrimmedOrUndefined(values.rightEye.cylinder),
@@ -272,6 +282,8 @@ export function PrescriptionForm({
         : (values.pdSingle ?? '').trim(),
       addPower,
       notes: toTrimmedOrUndefined(values.notes),
+      imagePath: uploadedImagePath || undefined,
+      imageFileName: uploadedImageName || undefined,
       legalConsent: values.legalConsent,
       legalAcceptedAt: new Date().toISOString(),
       saveToAccount: isLoggedIn ? values.saveToAccount : undefined,
@@ -280,9 +292,61 @@ export function PrescriptionForm({
     onSubmit(payload)
   }
 
+  const submitNonManualMode = () => {
+    const values = form.getValues()
+
+    if (!values.legalConsent) {
+      form.setError('legalConsent', {
+        type: 'manual',
+        message: 'Debes confirmar la declaracion legal para continuar.',
+      })
+      return
+    }
+
+    form.clearErrors('legalConsent')
+
+    if (mode === 'upload' && !uploadedImagePath) {
+      setUploadError('Debes subir una imagen de tu fórmula para continuar.')
+      return
+    }
+
+    setUploadError(null)
+
+    const payload: PrescriptionData & { saveToAccount?: boolean } = {
+      mode,
+      rightEye: {},
+      leftEye: {},
+      notes: toTrimmedOrUndefined(values.notes),
+      imagePath: uploadedImagePath || undefined,
+      imageFileName: uploadedImageName || undefined,
+      legalConsent: values.legalConsent,
+      legalAcceptedAt: new Date().toISOString(),
+      saveToAccount: isLoggedIn ? values.saveToAccount : undefined,
+    }
+
+    onSubmit(payload)
+  }
+
+  const handleUploadFile = (file: File | null) => {
+    if (!file) return
+
+    setUploadError(null)
+    startUploadTransition(async () => {
+      const result = await uploadPrescriptionImageAction(file, productSlug)
+
+      if (!result.success || !result.data) {
+        setUploadError(result.error ?? 'No se pudo subir la imagen de la fórmula')
+        return
+      }
+
+      setUploadedImagePath(result.data.path)
+      setUploadedImageName(result.data.fileName)
+    })
+  }
+
   return (
     <form
-      onSubmit={form.handleSubmit(submitHandler)}
+      onSubmit={(event) => event.preventDefault()}
       className={`${dmSans.className} space-y-6 rounded-2xl border border-[#E9E6DF] bg-[#FAFAF8] p-6 text-[#0F0F0D]`}
     >
       <header>
@@ -291,80 +355,136 @@ export function PrescriptionForm({
         </h2>
       </header>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <EyeColumn
-          title="Ojo Derecho (OD)"
-          prefix="rightEye"
-          register={form.register}
-          errors={form.formState.errors}
-        />
-        <EyeColumn
-          title="Ojo Izquierdo (OI)"
-          prefix="leftEye"
-          register={form.register}
-          errors={form.formState.errors}
-        />
-      </div>
-
       <section className="space-y-3 rounded-xl border border-[#E5E2DC] bg-white p-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold">PD (Distancia pupilar)</h3>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-[#2C3E6B]">PD dual</span>
-            <Switch
-              checked={pdDual}
-              onCheckedChange={(checked) => {
-                form.setValue('pdDual', checked, { shouldValidate: true })
-                form.clearErrors('pdSingle')
-              }}
-              className="data-checked:bg-[#2C3E6B]"
-            />
-          </div>
+        <h3 className="text-sm font-semibold">Cómo quieres registrar tu fórmula</h3>
+
+        <div className="grid gap-2 sm:grid-cols-3">
+          {[
+            { id: 'manual', label: 'Ingresar manualmente' },
+            { id: 'upload', label: 'Subir imagen' },
+            { id: 'pending', label: 'La llevaré después' },
+          ].map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              onClick={() => setMode(option.id as PrescriptionMode)}
+              className={`rounded-lg border px-3 py-2 text-sm font-medium transition ${
+                mode === option.id
+                  ? 'border-[#2C3E6B] bg-[#EEF1F8] text-[#2C3E6B]'
+                  : 'border-[#DDD7CC] bg-white text-[#5D5953]'
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
         </div>
+      </section>
 
-        {!pdDual ? (
-          <div>
-            <label className="mb-1 block text-xs font-medium text-[#2C3E6B]">PD</label>
-            <Input
-              type="number"
-              min={40}
-              max={80}
-              step="0.5"
-              placeholder="64"
-              {...form.register('pdSingle')}
+      {mode === 'manual' ? (
+        <>
+          <div className="grid gap-4 md:grid-cols-2">
+            <EyeColumn
+              title="Ojo Derecho (OD)"
+              prefix="rightEye"
+              register={form.register}
+              errors={form.formState.errors}
+            />
+            <EyeColumn
+              title="Ojo Izquierdo (OI)"
+              prefix="leftEye"
+              register={form.register}
+              errors={form.formState.errors}
             />
           </div>
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-[#2C3E6B]">OD</label>
-              <Input
-                type="number"
-                min={20}
-                max={40}
-                step="0.5"
-                placeholder="32"
-                {...form.register('pdRight')}
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-[#2C3E6B]">OI</label>
-              <Input
-                type="number"
-                min={20}
-                max={40}
-                step="0.5"
-                placeholder="32"
-                {...form.register('pdLeft')}
-              />
-            </div>
-          </div>
-        )}
 
-        {form.formState.errors.pdSingle?.message && (
-          <p className="text-xs text-red-600">{form.formState.errors.pdSingle.message}</p>
-        )}
-      </section>
+          <section className="space-y-3 rounded-xl border border-[#E5E2DC] bg-white p-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold">PD (Distancia pupilar)</h3>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-[#2C3E6B]">PD dual</span>
+                <Switch
+                  checked={pdDual}
+                  onCheckedChange={(checked) => {
+                    form.setValue('pdDual', checked, { shouldValidate: true })
+                    form.clearErrors('pdSingle')
+                  }}
+                  className="data-checked:bg-[#2C3E6B]"
+                />
+              </div>
+            </div>
+
+            {!pdDual ? (
+              <div>
+                <label className="mb-1 block text-xs font-medium text-[#2C3E6B]">PD</label>
+                <Input
+                  type="number"
+                  min={40}
+                  max={80}
+                  step="0.5"
+                  placeholder="64"
+                  {...form.register('pdSingle')}
+                />
+              </div>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-[#2C3E6B]">OD</label>
+                  <Input
+                    type="number"
+                    min={20}
+                    max={40}
+                    step="0.5"
+                    placeholder="32"
+                    {...form.register('pdRight')}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-[#2C3E6B]">OI</label>
+                  <Input
+                    type="number"
+                    min={20}
+                    max={40}
+                    step="0.5"
+                    placeholder="32"
+                    {...form.register('pdLeft')}
+                  />
+                </div>
+              </div>
+            )}
+
+            {form.formState.errors.pdSingle?.message && (
+              <p className="text-xs text-red-600">{form.formState.errors.pdSingle.message}</p>
+            )}
+          </section>
+        </>
+      ) : null}
+
+      {mode === 'upload' ? (
+        <section className="space-y-3 rounded-xl border border-[#E5E2DC] bg-white p-4">
+          <h3 className="text-sm font-semibold">Imagen de fórmula</h3>
+          <p className="text-xs text-[#5D5953]">Formato PNG, JPG o WEBP. Máximo 5MB.</p>
+
+          <Input
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            onChange={(event) => handleUploadFile(event.target.files?.[0] ?? null)}
+            disabled={isUploading}
+          />
+
+          {isUploading ? <p className="text-xs text-[#2C3E6B]">Subiendo imagen...</p> : null}
+          {uploadedImageName ? (
+            <p className="text-xs text-green-700">Imagen cargada: {uploadedImageName}</p>
+          ) : null}
+          {uploadError ? <p className="text-xs text-red-600">{uploadError}</p> : null}
+        </section>
+      ) : null}
+
+      {mode === 'pending' ? (
+        <section className="rounded-xl border border-[#E5E2DC] bg-white p-4 text-sm text-[#5D5953]">
+          Podrás enviar tu fórmula después de finalizar el pedido. Te contactaremos para
+          coordinarla.
+        </section>
+      ) : null}
 
       <section className="space-y-2">
         <label className="text-sm font-medium">Notas adicionales</label>
@@ -403,7 +523,8 @@ export function PrescriptionForm({
       ) : null}
 
       <Button
-        type="submit"
+        type="button"
+        onClick={mode === 'manual' ? form.handleSubmit(submitHandler) : submitNonManualMode}
         className="h-11 w-full rounded-full bg-[#D4A853] font-semibold text-[#0F0F0D] hover:bg-[#C79D4C]"
       >
         Continuar

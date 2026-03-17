@@ -94,10 +94,8 @@ async function fetchPageData(slug: string): Promise<PageData | null> {
   let lensOptions: Awaited<ReturnType<typeof getLensOptions>> = []
   let isLoggedIn = false
   try {
-    const [fetchedOptions, supabase] = await Promise.all([
-      getLensOptions().catch(() => []),
-      createClient(),
-    ])
+    const supabase = await createClient()
+    const [fetchedOptions] = await Promise.all([getLensOptions(supabase).catch(() => [])])
     lensOptions = fetchedOptions
     const { data } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }))
     isLoggedIn = Boolean(data.user)

@@ -171,6 +171,7 @@ export function LensConfiguratorModal({
                     setPrescription(data)
                     setStep(3)
                   }}
+                  productSlug={product.slug}
                   isLoggedIn={isLoggedIn}
                 />
               </div>
@@ -278,37 +279,52 @@ export function LensConfiguratorModal({
                 <section className="rounded-xl border border-[#E5E2DC] bg-white p-4">
                   <h3 className="mb-3 text-sm font-semibold text-[#2C3E6B]">Fórmula</h3>
 
-                  <div className="overflow-hidden rounded-lg border border-[#ECE8DF]">
-                    <table className="w-full text-sm">
-                      <thead className="bg-[#F6F2E9] text-[#4A463F]">
-                        <tr>
-                          <th className="px-2 py-2 text-left font-semibold">Ojo</th>
-                          <th className="px-2 py-2 text-left font-semibold">SPH</th>
-                          <th className="px-2 py-2 text-left font-semibold">CYL</th>
-                          <th className="px-2 py-2 text-left font-semibold">AXIS</th>
-                          <th className="px-2 py-2 text-left font-semibold">ADD</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr className="border-t border-[#ECE8DF]">
-                          <td className="px-2 py-2 font-medium">OD</td>
-                          <td className="px-2 py-2">{prescription.rightEye.sphere ?? '-'}</td>
-                          <td className="px-2 py-2">{prescription.rightEye.cylinder ?? '-'}</td>
-                          <td className="px-2 py-2">{prescription.rightEye.axis ?? '-'}</td>
-                          <td className="px-2 py-2">{prescription.addPower ?? '-'}</td>
-                        </tr>
-                        <tr className="border-t border-[#ECE8DF]">
-                          <td className="px-2 py-2 font-medium">OI</td>
-                          <td className="px-2 py-2">{prescription.leftEye.sphere ?? '-'}</td>
-                          <td className="px-2 py-2">{prescription.leftEye.cylinder ?? '-'}</td>
-                          <td className="px-2 py-2">{prescription.leftEye.axis ?? '-'}</td>
-                          <td className="px-2 py-2">{prescription.addPower ?? '-'}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
+                  {prescription.mode === 'manual' ? (
+                    <>
+                      <div className="overflow-hidden rounded-lg border border-[#ECE8DF]">
+                        <table className="w-full text-sm">
+                          <thead className="bg-[#F6F2E9] text-[#4A463F]">
+                            <tr>
+                              <th className="px-2 py-2 text-left font-semibold">Ojo</th>
+                              <th className="px-2 py-2 text-left font-semibold">SPH</th>
+                              <th className="px-2 py-2 text-left font-semibold">CYL</th>
+                              <th className="px-2 py-2 text-left font-semibold">AXIS</th>
+                              <th className="px-2 py-2 text-left font-semibold">ADD</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr className="border-t border-[#ECE8DF]">
+                              <td className="px-2 py-2 font-medium">OD</td>
+                              <td className="px-2 py-2">{prescription.rightEye.sphere ?? '-'}</td>
+                              <td className="px-2 py-2">{prescription.rightEye.cylinder ?? '-'}</td>
+                              <td className="px-2 py-2">{prescription.rightEye.axis ?? '-'}</td>
+                              <td className="px-2 py-2">{prescription.addPower ?? '-'}</td>
+                            </tr>
+                            <tr className="border-t border-[#ECE8DF]">
+                              <td className="px-2 py-2 font-medium">OI</td>
+                              <td className="px-2 py-2">{prescription.leftEye.sphere ?? '-'}</td>
+                              <td className="px-2 py-2">{prescription.leftEye.cylinder ?? '-'}</td>
+                              <td className="px-2 py-2">{prescription.leftEye.axis ?? '-'}</td>
+                              <td className="px-2 py-2">{prescription.addPower ?? '-'}</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                      <p className="mt-2 text-sm text-[#2C3E6B]">PD: {prescription.pd ?? '-'}</p>
+                    </>
+                  ) : null}
 
-                  <p className="mt-2 text-sm text-[#2C3E6B]">PD: {prescription.pd ?? '-'}</p>
+                  {prescription.mode === 'upload' ? (
+                    <p className="text-sm text-[#2C3E6B]">
+                      Fórmula cargada: {prescription.imageFileName ?? 'imagen adjunta'}
+                    </p>
+                  ) : null}
+
+                  {prescription.mode === 'pending' ? (
+                    <p className="text-sm text-[#2C3E6B]">
+                      El cliente enviará la fórmula después de confirmar el pedido.
+                    </p>
+                  ) : null}
                 </section>
 
                 <section className="rounded-xl border border-[#E2DED5] bg-white p-4">

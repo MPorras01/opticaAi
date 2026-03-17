@@ -1,4 +1,6 @@
-import { createClient } from '@/lib/supabase/server'
+import type { SupabaseClient } from '@supabase/supabase-js'
+
+import type { Database } from '@/types/database.types'
 
 export type LensOption = {
   id: string
@@ -29,8 +31,7 @@ function toLensOptions(
     }))
 }
 
-export async function getLensOptions(): Promise<LensOption[]> {
-  const supabase = await createClient()
+export async function getLensOptions(supabase: SupabaseClient<Database>): Promise<LensOption[]> {
   const { data, error } = await supabase
     .from('lens_options')
     .select('*')
@@ -41,8 +42,7 @@ export async function getLensOptions(): Promise<LensOption[]> {
   return toLensOptions(data ?? [])
 }
 
-export async function getAllLensOptions(): Promise<LensOption[]> {
-  const supabase = await createClient()
+export async function getAllLensOptions(supabase: SupabaseClient<Database>): Promise<LensOption[]> {
   const { data, error } = await supabase
     .from('lens_options')
     .select('*')
@@ -53,9 +53,9 @@ export async function getAllLensOptions(): Promise<LensOption[]> {
 }
 
 export async function upsertLensOption(
+  supabase: SupabaseClient<Database>,
   option: Omit<LensOption, 'id'> & { id?: string }
 ): Promise<LensOption> {
-  const supabase = await createClient()
   const { data, error } = await supabase.from('lens_options').upsert(option).select().single()
   if (error) throw error
 
@@ -69,8 +69,10 @@ export async function upsertLensOption(
   }
 }
 
-export async function deleteLensOption(id: string): Promise<void> {
-  const supabase = await createClient()
+export async function deleteLensOption(
+  supabase: SupabaseClient<Database>,
+  id: string
+): Promise<void> {
   const { error } = await supabase.from('lens_options').delete().eq('id', id)
   if (error) throw error
 }

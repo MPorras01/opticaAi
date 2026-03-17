@@ -11,7 +11,7 @@ export default async function AdminUsersRoute() {
   const [{ data: profiles }, authUsersResponse] = await Promise.all([
     supabase
       .from('profiles')
-      .select('id, full_name, phone, role, created_at')
+      .select('id, full_name, phone, role, city, address, created_at')
       .order('created_at', { ascending: false }),
     adminClient.auth.admin.listUsers({ page: 1, perPage: 200 }),
   ])
@@ -29,6 +29,8 @@ export default async function AdminUsersRoute() {
       full_name: profile.full_name,
       phone: profile.phone,
       role: profile.role,
+      city: profile.city,
+      address: profile.address,
       created_at: profile.created_at,
       last_sign_in_at: authUser?.last_sign_in_at ?? null,
       email_confirmed_at: authUser?.email_confirmed_at ?? null,

@@ -31,18 +31,37 @@ type SerializedLensNotes = {
 
 export const LENS_TYPE_LABELS: Record<LensType, string> = {
   'sin-lente': 'Solo montura',
-  monofocal: 'Lente monofocal',
-  bifocal: 'Lente bifocal',
-  progresivo: 'Lente progresivo',
-  solar: 'Lente solar',
+  monofocal: 'Monofocal',
+  bifocal: 'Bifocal',
+  progresivo: 'Progresivo',
+  solar: 'Solar',
 }
 
 export const LENS_FILTER_LABELS: Record<LensFilterOption, string> = {
   'blue-light': 'Filtro luz azul',
-  photochromic: 'Fotocromatico',
+  photochromic: 'Fotocromático',
   'anti-reflective': 'Antirreflejo',
-  'uv-protection': 'Proteccion UV',
+  'uv-protection': 'Protección UV',
   polarized: 'Polarizado',
+}
+
+export const LENS_MATERIAL_LABELS: Record<string, string> = {
+  'cr-39': 'CR-39',
+  polycarbonate: 'Policarbonato',
+  trivex: 'Trivex',
+}
+
+export const LENS_TINT_LABELS: Record<string, string> = {
+  clear: 'Sin tinte',
+  gray: 'Gris',
+  brown: 'Café',
+  green: 'Verde',
+}
+
+export const LENS_THICKNESS_LABELS: Record<string, string> = {
+  '1.50': 'Estándar 1.50',
+  '1.60': 'Delgado 1.60',
+  '1.67': 'Ultra delgado 1.67',
 }
 
 function normalizeValue(value?: string) {

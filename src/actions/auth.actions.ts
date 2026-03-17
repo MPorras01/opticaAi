@@ -40,6 +40,15 @@ type ResetPasswordInput = {
   newPassword: string
 }
 
+type AdminUpdateUserInput = {
+  userId: string
+  full_name: string
+  phone: string
+  role?: 'admin' | 'customer'
+  address?: string
+  city?: string
+}
+
 export type AuthUser = {
   id: string
   email: string
@@ -57,6 +66,34 @@ function isStrongPassword(password: string): boolean {
     /[^A-Za-z0-9]/.test(password) &&
     password.length >= 10
   )
+}
+
+async function requireAdminUser() {
+  const supabase = await createServerClient()
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
+
+  if (userError || !user) {
+    return { supabase, user: null, error: 'Debes iniciar sesion como administrador' as const }
+  }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile || profile.role !== 'admin') {
+    return {
+      supabase,
+      user: null,
+      error: 'Solo administradores pueden ejecutar esta accion' as const,
+    }
+  }
+
+  return { supabase, user, error: null }
 }
 
 async function setSessionStartedCookie() {
@@ -363,24 +400,10 @@ export async function createTestUserAction(): Promise<
   ActionResult<{ email: string; password: string }>
 > {
   try {
-    const supabase = await createServerClient()
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser()
+    const { error: adminError } = await requireAdminUser()
 
-    if (userError || !user) {
-      return { success: false, error: 'Debes iniciar sesion como administrador' }
-    }
-
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile || profile.role !== 'admin') {
-      return { success: false, error: 'Solo administradores pueden crear usuarios de prueba' }
+    if (adminError) {
+      return { success: false, error: adminError }
     }
 
     const adminClient = createAdminClient()
@@ -459,6 +482,62 @@ export async function getCurrentUserAction(): Promise<ActionResult<AuthUser | nu
         email: user.email,
       },
     }
+  } catch (error) {
+    return { success: false, error: getErrorMessage(error) }
+  }
+}
+
+export async function updateUserByAdminAction(
+  input: AdminUpdateUserInput
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const { error: adminError } = await requireAdminUser()
+
+    if (adminError) {
+      return { success: false, error: adminError }
+    }
+
+    const userId = input.userId.trim()
+    const fullName = input.full_name.trim()
+    const phone = input.phone.trim()
+
+    if (!userId) {
+      return { success: false, error: 'Usuario invalido' }
+    }
+
+    if (fullName.length < 3) {
+      return { success: false, error: 'El nombre es demasiado corto' }
+    }
+
+    if (!isValidColombianPhone(phone)) {
+      return { success: false, error: 'El numero de telefono no es valido' }
+    }
+
+    const adminClient = createAdminClient()
+    const updatePayload: {
+      full_name: string
+      phone: string
+      address: string | null
+      city: string | null
+      role?: 'admin' | 'customer'
+    } = {
+      full_name: fullName,
+      phone,
+      address: input.address?.trim() || null,
+      city: input.city?.trim() || null,
+    }
+
+    if (input.role) {
+      updatePayload.role = input.role
+    }
+
+    const { error } = await adminClient.from('profiles').update(updatePayload).eq('id', userId)
+
+    if (error) {
+      throw error
+    }
+
+    return { success: true, data: { id: userId } }
   } catch (error) {
     return { success: false, error: getErrorMessage(error) }
   }

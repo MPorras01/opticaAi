@@ -1,9 +1,8 @@
-'use client'
-
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Image from 'next/image'
 import { DM_Sans, Playfair_Display } from 'next/font/google'
 import { toast } from 'sonner'
+import { ChevronLeft, ChevronRight, Check } from 'lucide-react'
 
 import { uploadPrescriptionImageAction } from '@/actions/orders.actions'
 import {
@@ -21,6 +20,9 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import {
   LENS_FILTER_LABELS,
+  LENS_MATERIAL_LABELS,
+  LENS_THICKNESS_LABELS,
+  LENS_TINT_LABELS,
   LENS_TYPE_LABELS,
   hasPrescriptionDetails,
 } from '@/lib/utils/lens-config'
@@ -33,6 +35,8 @@ import type {
   Product,
   ProductWithCategory,
 } from '@/types'
+import { createClient } from '@/lib/supabase/client'
+import { getLensOptions, type LensOption } from '@/lib/repositories/lens-options.repo'
 
 const dmSans = DM_Sans({ subsets: ['latin'], weight: ['400', '500', '600'] })
 const playfairDisplay = Playfair_Display({
@@ -41,14 +45,15 @@ const playfairDisplay = Playfair_Display({
   weight: ['500', '600'],
 })
 
-const LENS_TYPES: LensType[] = ['sin-lente', 'monofocal', 'bifocal', 'progresivo', 'solar']
-const LENS_FILTERS: LensFilterOption[] = [
-  'blue-light',
-  'photochromic',
-  'anti-reflective',
-  'uv-protection',
-  'polarized',
-]
+type ConfigStep = 'lenses' | 'prescription' | 'summary'
+
+type AdvancedSelection = {
+  type?: LensOption
+  material?: LensOption
+  filters: LensOption[]
+  tint?: LensOption
+  thickness?: LensOption
+}
 
 type ProductConfiguratorDialogProps = {
   product: Product | ProductWithCategory
@@ -77,30 +82,52 @@ export function ProductConfiguratorDialog({
   const images = product.images?.length ? product.images : ['/placeholder.svg']
 
   const [open, setOpen] = useState(false)
+  const [step, setStep] = useState<ConfigStep>('lenses')
   const [selectedImage, setSelectedImage] = useState(initialImage ?? images[0])
-  const [lensType, setLensType] = useState<LensType>('sin-lente')
-  const [lensFilters, setLensFilters] = useState<LensFilterOption[]>([])
+  const [lensOptions, setLensOptions] = useState<LensOption[]>([])
+  const [selection, setSelection] = useState<AdvancedSelection>({
+    filters: [],
+  })
   const [prescription, setPrescription] = useState<PrescriptionData>(createEmptyPrescription())
   const [isUploadingPrescription, setIsUploadingPrescription] = useState(false)
 
-  const shouldCapturePrescription = lensType !== 'sin-lente'
-  const selectedLensLabel = LENS_TYPE_LABELS[lensType]
-  const summaryMessage = shouldCapturePrescription
-    ? `${selectedLensLabel}${lensFilters.length ? ` · ${lensFilters.length} filtro(s)` : ''}`
-    : 'Comprar solo montura'
-  const prescriptionStateLabel =
-    prescription.mode === 'manual'
-      ? 'Formula diligenciada'
-      : prescription.mode === 'upload'
-        ? prescription.imagePath
-          ? 'Formula adjunta'
-          : 'Carga pendiente'
-        : 'Se enviara despues'
+  useEffect(() => {
+    if (open) {
+      try {
+        const supabase = createClient()
+        getLensOptions(supabase).then(setLensOptions).catch(console.error)
+      } catch (err) {
+        console.error(err)
+      }
+    }
+  }, [open])
 
-  function toggleFilter(filter: LensFilterOption, checked: boolean) {
-    setLensFilters((current) =>
-      checked ? [...current, filter] : current.filter((value) => value !== filter)
-    )
+  const lensTypes = lensOptions.filter((o) => o.category === 'type')
+  const materials = lensOptions.filter((o) => o.category === 'material')
+  const filters = lensOptions.filter((o) => o.category === 'filter')
+  const tints = lensOptions.filter((o) => o.category === 'tint')
+  const thicknesses = lensOptions.filter((o) => o.category === 'thickness')
+
+  const totalPriceAddition =
+    (selection.type?.price_addition ?? 0) +
+    (selection.material?.price_addition ?? 0) +
+    selection.filters.reduce((acc, f) => acc + f.price_addition, 0) +
+    (selection.tint?.price_addition ?? 0) +
+    (selection.thickness?.price_addition ?? 0)
+
+  const finalPrice = product.price + totalPriceAddition
+
+  const isLensRequired = selection.type !== undefined
+
+  const summaryMessage = isLensRequired
+    ? `${selection.type?.name ?? ''}${selection.filters.length ? ` · ${selection.filters.length} filtros` : ''}`
+    : 'Solo montura'
+
+  function toggleFilter(option: LensOption, checked: boolean) {
+    setSelection((prev) => ({
+      ...prev,
+      filters: checked ? [...prev.filters, option] : prev.filters.filter((f) => f.id !== option.id),
+    }))
   }
 
   function updatePrescription(
@@ -118,31 +145,29 @@ export function ProductConfiguratorDialog({
   }
 
   function handleAddToCart() {
-    if (shouldCapturePrescription && prescription.mode === 'manual') {
+    if (isLensRequired && prescription.mode === 'manual') {
       if (!hasPrescriptionDetails(prescription)) {
-        toast.error('Completa la formula o selecciona que la enviaras despues')
+        toast.error('Completa la fórmula o selecciona que la enviarás después')
         return
       }
-
       if (!prescription.legalConsent) {
-        toast.error('Debes autorizar el tratamiento y almacenamiento de la formula')
+        toast.error('Debes autorizar el tratamiento y almacenamiento de la fórmula')
         return
       }
     }
 
-    if (shouldCapturePrescription && prescription.mode === 'upload') {
+    if (isLensRequired && prescription.mode === 'upload') {
       if (!prescription.imagePath) {
-        toast.error('Adjunta la imagen de la formula o selecciona otra opcion')
+        toast.error('Adjunta la imagen de la fórmula o selecciona otra opción')
         return
       }
-
       if (!prescription.legalConsent) {
-        toast.error('Debes autorizar el tratamiento y almacenamiento de la formula')
+        toast.error('Debes autorizar el tratamiento y almacenamiento de la fórmula')
         return
       }
     }
 
-    const nextPrescription: PrescriptionData | null = !shouldCapturePrescription
+    const nextPrescription: PrescriptionData | null = !isLensRequired
       ? null
       : prescription.mode === 'manual' || prescription.mode === 'upload'
         ? {
@@ -159,26 +184,37 @@ export function ProductConfiguratorDialog({
       id: product.id,
       name: product.name,
       slug: product.slug,
-      price: product.price,
+      price: finalPrice,
       image: selectedImage,
-      lensType,
-      lensFilters: shouldCapturePrescription ? lensFilters : [],
+      lensType: selection.type?.id ? (selection.type.name.toLowerCase() as LensType) : 'sin-lente',
+      lensFilters: selection.filters.map((f) => f.name.toLowerCase() as LensFilterOption),
+      lensSelection: isLensRequired
+        ? {
+            type: selection.type?.name,
+            typeId: selection.type?.id,
+            material: selection.material?.name,
+            materialId: selection.material?.id,
+            filters: selection.filters.map((f) => f.name),
+            filterIds: selection.filters.map((f) => f.id),
+            tint: selection.tint?.name,
+            tintId: selection.tint?.id,
+            thickness: selection.thickness?.name,
+            thicknessId: selection.thickness?.id,
+            totalAddition: totalPriceAddition,
+          }
+        : undefined,
       prescription: nextPrescription,
     })
 
-    toast.success('Producto agregado con configuracion personalizada')
+    toast.success('Producto agregado con configuración personalizada')
     setOpen(false)
     openCart()
   }
 
   async function handlePrescriptionUpload(file: File | null) {
-    if (!file) {
-      return
-    }
-
+    if (!file) return
     setIsUploadingPrescription(true)
     const result = await uploadPrescriptionImageAction(file, product.slug)
-
     if (result.success && result.data) {
       setPrescription((current) => ({
         ...current,
@@ -186,557 +222,663 @@ export function ProductConfiguratorDialog({
         imagePath: result.data?.path,
         imageFileName: result.data?.fileName,
       }))
-      toast.success('Formula cargada correctamente')
+      toast.success('Fórmula cargada correctamente')
     } else {
-      toast.error(result.error ?? 'No se pudo cargar la formula')
+      toast.error(result.error ?? 'No se pudo cargar la fórmula')
     }
-
     setIsUploadingPrescription(false)
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(val) => {
+        setOpen(val)
+        if (!val) {
+          setStep('lenses')
+          setSelection({ filters: [] })
+          setPrescription(createEmptyPrescription())
+        }
+      }}
+    >
       <DialogTrigger render={trigger} />
-      <DialogContent className="max-h-[95vh] max-w-[1320px] overflow-hidden rounded-3xl border border-[#E6DECF] bg-[#FAF8F3] p-0">
-        <div className="grid gap-0 lg:h-[95vh] lg:grid-cols-[440px_minmax(0,1fr)] xl:grid-cols-[500px_minmax(0,1fr)]">
-          <section className="border-b border-[#E6DECF] bg-[#F4EEE1] p-5 lg:overflow-y-auto lg:border-r lg:border-b-0 lg:p-7">
-            <div className="flex h-full flex-col gap-5">
-              <div>
-                <p
-                  className={
-                    dmSans.className +
-                    ' text-[11px] font-medium tracking-[0.16em] text-[#8A6A2F] uppercase'
-                  }
-                >
-                  Configurador de compra
-                </p>
-                <h2
-                  className={
-                    playfairDisplay.className + ' mt-2 text-3xl font-semibold text-[#0F0F0D]'
-                  }
-                >
-                  {product.name}
-                </h2>
-                <p className={dmSans.className + ' mt-2 text-sm leading-6 text-[#66665F]'}>
-                  Elige el lente y define como compartir la formula de forma rapida.
-                </p>
-              </div>
+      <DialogContent className="max-h-[85vh] max-w-[1100px] overflow-hidden rounded-3xl border border-[#E6DECF] bg-[#FAF8F3] p-0">
+        <div className="grid h-[85vh] grid-cols-1 lg:grid-cols-[380px_1fr]">
+          {/* Sidebar */}
+          <section className="hidden flex-col border-r border-[#E6DECF] bg-[#F4EEE1] lg:flex">
+            <div className="flex-1 overflow-y-auto p-8">
+              <p
+                className={
+                  dmSans.className +
+                  ' text-[11px] font-medium tracking-[0.2em] text-[#8A6A2F] uppercase'
+                }
+              >
+                Configuración de pedido
+              </p>
 
-              <div className="relative aspect-[4/5] overflow-hidden rounded-2xl border border-[#DED5C3] bg-white">
-                <Image
-                  src={selectedImage}
-                  alt={product.name}
-                  fill
-                  className="object-cover"
-                  sizes="(min-width: 1280px) 500px, (min-width: 1024px) 440px, 100vw"
-                />
-              </div>
-
-              {images.length > 1 && (
-                <div className="flex gap-2 overflow-x-auto pb-1">
-                  {images.map((image) => (
-                    <button
-                      key={image}
-                      type="button"
-                      onClick={() => setSelectedImage(image)}
-                      className={cn(
-                        'relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border bg-white',
-                        selectedImage === image ? 'border-[#D4A853]' : 'border-[#DCCFB9]'
-                      )}
-                    >
-                      <Image
-                        src={image}
-                        alt={product.name}
-                        fill
-                        className="object-cover"
-                        sizes="64px"
-                      />
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-                <div className="rounded-xl border border-[#E3DCCD] bg-white px-4 py-3">
-                  <p className={dmSans.className + ' text-xs text-[#7B776E]'}>Precio base</p>
-                  <p
-                    className={
-                      playfairDisplay.className + ' text-2xl font-semibold text-[#0F0F0D] italic'
-                    }
+              <div className="mt-8 space-y-6">
+                <div className="flex items-center gap-4">
+                  <div
+                    className={cn(
+                      'flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition-colors',
+                      step === 'lenses' ? 'bg-[#0F0F0D] text-white' : 'bg-[#E6DECF] text-[#8A6A2F]'
+                    )}
                   >
-                    {formatCOP(product.price)}
-                  </p>
+                    {selection.type ? <Check size={14} /> : '1'}
+                  </div>
+                  <div>
+                    <p className={dmSans.className + ' text-sm font-semibold text-[#0F0F0D]'}>
+                      Lentes
+                    </p>
+                    <p className={dmSans.className + ' text-xs text-[#66665F]'}>
+                      {selection.type ? selection.type.name : 'Tipo, material y filtros'}
+                    </p>
+                  </div>
                 </div>
-                <div className="rounded-xl border border-[#E3DCCD] bg-white px-4 py-3">
-                  <p className={dmSans.className + ' text-xs text-[#7B776E]'}>Resumen</p>
-                  <p className={dmSans.className + ' text-sm font-medium text-[#0F0F0D]'}>
-                    {summaryMessage}
-                  </p>
-                  <p className={dmSans.className + ' mt-1 text-xs text-[#7B776E]'}>
-                    Estado: {prescriptionStateLabel}
+
+                <div className="flex items-center gap-4">
+                  <div
+                    className={cn(
+                      'flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition-colors',
+                      step === 'prescription'
+                        ? 'bg-[#0F0F0D] text-white'
+                        : 'bg-[#E6DECF] text-[#8A6A2F]'
+                    )}
+                  >
+                    {hasPrescriptionDetails(prescription) ? <Check size={14} /> : '2'}
+                  </div>
+                  <div>
+                    <p className={dmSans.className + ' text-sm font-semibold text-[#0F0F0D]'}>
+                      Fórmula
+                    </p>
+                    <p className={dmSans.className + ' text-xs text-[#66665F]'}>
+                      {prescription.mode === 'manual'
+                        ? 'Diligenciada'
+                        : 'Adjuntar o enviar después'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <div
+                    className={cn(
+                      'flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition-colors',
+                      step === 'summary' ? 'bg-[#0F0F0D] text-white' : 'bg-[#E6DECF] text-[#8A6A2F]'
+                    )}
+                  >
+                    3
+                  </div>
+                  <div>
+                    <p className={dmSans.className + ' text-sm font-semibold text-[#0F0F0D]'}>
+                      Resumen
+                    </p>
+                    <p className={dmSans.className + ' text-xs text-[#66665F]'}>Confirmar pedido</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-12 space-y-4">
+                <div className="relative aspect-[4/3] overflow-hidden rounded-2xl border border-[#DED5C3] bg-white">
+                  <Image src={selectedImage} alt={product.name} fill className="object-cover" />
+                </div>
+                <div>
+                  <h3
+                    className={playfairDisplay.className + ' text-xl font-semibold text-[#0F0F0D]'}
+                  >
+                    {product.name}
+                  </h3>
+                  <p className={dmSans.className + ' mt-1 text-sm text-[#8A6A2F] italic'}>
+                    {formatCOP(finalPrice)}
                   </p>
                 </div>
               </div>
+            </div>
+
+            <div className="border-t border-[#E6DECF] p-8">
+              <p
+                className={
+                  dmSans.className + ' mb-2 text-[10px] tracking-wider text-[#8A6A2F] uppercase'
+                }
+              >
+                Resumen actual
+              </p>
+              <p className={dmSans.className + ' text-sm font-medium text-[#0F0F0D]'}>
+                {summaryMessage}
+              </p>
             </div>
           </section>
 
-          <section className="flex min-h-0 flex-col bg-[#FAF8F3] lg:overflow-y-auto">
-            <div className="flex-1 px-5 py-5 lg:px-8 lg:py-7">
-              <DialogHeader className="space-y-2 border-b border-[#E6DECF] pb-5">
-                <DialogTitle
-                  className={playfairDisplay.className + ' text-3xl font-semibold text-[#0F0F0D]'}
-                >
-                  Personaliza tu pedido
-                </DialogTitle>
-                <DialogDescription
-                  className={dmSans.className + ' text-sm leading-6 text-[#66665F]'}
-                >
-                  Flujo simple en tres pasos: lente, tratamientos y formula.
-                </DialogDescription>
-              </DialogHeader>
+          {/* Main Content */}
+          <section className="flex flex-col overflow-hidden bg-white">
+            <div className="flex flex-1 flex-col overflow-y-auto p-6 lg:p-10">
+              {step === 'lenses' && (
+                <div className="space-y-10">
+                  <header>
+                    <h2
+                      className={
+                        playfairDisplay.className + ' text-3xl font-semibold text-[#0F0F0D]'
+                      }
+                    >
+                      Configura tus lentes
+                    </h2>
+                    <p className={dmSans.className + ' mt-2 text-[#66665F]'}>
+                      Elige las opciones que mejor se adapten a tus necesidades.
+                    </p>
+                  </header>
 
-              <div className="mt-6 space-y-6 pb-8">
-                <section className="rounded-2xl border border-[#E6DECF] bg-white p-5">
-                  <div className="mb-4 flex items-center justify-between">
-                    <h3 className={dmSans.className + ' text-sm font-semibold text-[#0F0F0D]'}>
-                      1. Tipo de lente
-                    </h3>
-                    <span className={dmSans.className + ' text-xs text-[#8A6A2F]'}>
-                      Obligatorio
-                    </span>
-                  </div>
-
-                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                    {LENS_TYPES.map((option) => {
-                      const active = lensType === option
-
-                      return (
+                  {/* Lens Type */}
+                  <div className="space-y-4">
+                    <h4
+                      className={
+                        dmSans.className +
+                        ' text-xs font-bold tracking-widest text-[#8A6A2F] uppercase'
+                      }
+                    >
+                      Tipo de lente
+                    </h4>
+                    <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+                      <button
+                        onClick={() => setSelection((prev) => ({ ...prev, type: undefined }))}
+                        className={cn(
+                          'rounded-xl border p-4 text-left transition-all',
+                          !selection.type
+                            ? 'border-[#D4A853] bg-[#FFF9EE]'
+                            : 'border-[#E6DECF] hover:border-[#D4A853]'
+                        )}
+                      >
+                        <p className={dmSans.className + ' text-sm font-bold'}>Sin lentes</p>
+                        <p className={dmSans.className + ' mt-1 text-xs text-[#66665F]'}>
+                          Solo montura
+                        </p>
+                      </button>
+                      {lensTypes.map((opt) => (
                         <button
-                          key={option}
-                          type="button"
-                          onClick={() => setLensType(option)}
+                          key={opt.id}
+                          onClick={() => setSelection((prev) => ({ ...prev, type: opt }))}
                           className={cn(
-                            dmSans.className,
-                            'rounded-xl border px-4 py-3 text-left text-sm transition',
-                            active
-                              ? 'border-[#0F0F0D] bg-[#0F0F0D] text-[#FAFAF8]'
-                              : 'border-[#E6DECF] bg-white text-[#3E3E38] hover:border-[#B8A98B]'
+                            'rounded-xl border p-4 text-left transition-all',
+                            selection.type?.id === opt.id
+                              ? 'border-[#D4A853] bg-[#FFF9EE]'
+                              : 'border-[#E6DECF] hover:border-[#D4A853]'
                           )}
                         >
-                          <p className="font-semibold">{LENS_TYPE_LABELS[option]}</p>
-                          <p
-                            className={cn(
-                              'mt-1 text-xs leading-5',
-                              active ? 'text-[#E8E0D2]' : 'text-[#6F6A61]'
-                            )}
-                          >
-                            {option === 'sin-lente'
-                              ? 'Solo montura.'
-                              : 'Incluye configuracion de formula.'}
+                          <p className={dmSans.className + ' text-sm font-bold'}>{opt.name}</p>
+                          <p className={dmSans.className + ' mt-1 text-xs text-[#8A6A2F]'}>
+                            +{formatCOP(opt.price_addition)}
                           </p>
                         </button>
-                      )
-                    })}
+                      ))}
+                    </div>
                   </div>
-                </section>
 
-                {shouldCapturePrescription && (
-                  <>
-                    <section className="rounded-2xl border border-[#E6DECF] bg-white p-5">
-                      <div className="mb-4 flex items-center justify-between">
-                        <h3 className={dmSans.className + ' text-sm font-semibold text-[#0F0F0D]'}>
-                          2. Filtros y tratamientos
-                        </h3>
-                        <span className={dmSans.className + ' text-xs text-[#8A6A2F]'}>
-                          Opcional
-                        </span>
-                      </div>
-
-                      <div className="grid gap-3 md:grid-cols-2">
-                        {LENS_FILTERS.map((filter) => {
-                          const checked = lensFilters.includes(filter)
-
-                          return (
-                            <label
-                              key={filter}
-                              className={cn(
-                                'flex items-start gap-3 rounded-xl border px-4 py-3 transition',
-                                checked
-                                  ? 'border-[#D4A853] bg-[#FFF8EA]'
-                                  : 'border-[#E6DECF] bg-white hover:border-[#D8C7A7]'
-                              )}
-                            >
-                              <Checkbox
-                                checked={checked}
-                                onCheckedChange={(nextChecked) =>
-                                  toggleFilter(filter, Boolean(nextChecked))
-                                }
-                              />
-                              <span className={dmSans.className + ' text-sm text-[#3E3E38]'}>
-                                {LENS_FILTER_LABELS[filter]}
-                              </span>
-                            </label>
-                          )
-                        })}
-                      </div>
-                    </section>
-
-                    <section className="rounded-2xl border border-[#E6DECF] bg-white p-5">
-                      <div className="mb-4 flex items-center justify-between">
-                        <h3 className={dmSans.className + ' text-sm font-semibold text-[#0F0F0D]'}>
-                          3. Formula oftalmica
-                        </h3>
-                        <span className={dmSans.className + ' text-xs text-[#8A6A2F]'}>
-                          Requerido
-                        </span>
-                      </div>
-
-                      <div className="grid gap-3 lg:grid-cols-3">
-                        {[
-                          {
-                            key: 'manual' as const,
-                            title: 'Ingresar ahora',
-                            copy: 'Escribe tus datos.',
-                          },
-                          {
-                            key: 'upload' as const,
-                            title: 'Subir imagen',
-                            copy: 'Adjunta foto de la formula.',
-                          },
-                          {
-                            key: 'pending' as const,
-                            title: 'Enviar despues',
-                            copy: 'La compartes en seguimiento.',
-                          },
-                        ].map((modeOption) => {
-                          const active = prescription.mode === modeOption.key
-
-                          return (
+                  {isLensRequired && (
+                    <>
+                      {/* Material */}
+                      <div className="space-y-4">
+                        <h4
+                          className={
+                            dmSans.className +
+                            ' text-xs font-bold tracking-widest text-[#8A6A2F] uppercase'
+                          }
+                        >
+                          Material
+                        </h4>
+                        <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+                          {materials.map((opt) => (
                             <button
-                              key={modeOption.key}
-                              type="button"
-                              onClick={() =>
-                                setPrescription((current) => ({
-                                  ...current,
-                                  mode: modeOption.key,
-                                  ...(modeOption.key === 'pending'
-                                    ? { legalConsent: false, legalAcceptedAt: null }
-                                    : {}),
-                                }))
-                              }
+                              key={opt.id}
+                              onClick={() => setSelection((prev) => ({ ...prev, material: opt }))}
                               className={cn(
-                                dmSans.className,
-                                'rounded-xl border px-4 py-3 text-left transition',
-                                active
-                                  ? 'border-[#0F0F0D] bg-[#0F0F0D] text-[#FAFAF8]'
-                                  : 'border-[#E6DECF] bg-white text-[#3E3E38] hover:border-[#B8A98B]'
+                                'rounded-xl border p-4 text-left transition-all',
+                                selection.material?.id === opt.id
+                                  ? 'border-[#D4A853] bg-[#FFF9EE]'
+                                  : 'border-[#E6DECF] hover:border-[#D4A853]'
                               )}
                             >
-                              <p className="text-sm font-semibold">{modeOption.title}</p>
-                              <p
-                                className={cn(
-                                  'mt-1 text-xs',
-                                  active ? 'text-[#E8E0D2]' : 'text-[#6F6A61]'
-                                )}
-                              >
-                                {modeOption.copy}
+                              <p className={dmSans.className + ' text-sm font-bold'}>{opt.name}</p>
+                              <p className={dmSans.className + ' mt-1 text-xs text-[#8A6A2F]'}>
+                                +{formatCOP(opt.price_addition)}
                               </p>
                             </button>
-                          )
-                        })}
+                          ))}
+                        </div>
                       </div>
 
-                      <div className="mt-5 rounded-xl border border-[#ECE5D8] bg-[#FCFBF8] p-4">
-                        {prescription.mode === 'manual' ? (
-                          <div className="space-y-5">
-                            <div className="grid gap-4 xl:grid-cols-2">
-                              <div className="space-y-3">
-                                <p
-                                  className={
-                                    dmSans.className + ' text-sm font-semibold text-[#0F0F0D]'
-                                  }
-                                >
-                                  Ojo derecho (OD)
-                                </p>
-                                <div className="grid gap-3 sm:grid-cols-3">
-                                  <div className="space-y-1.5">
-                                    <Label htmlFor="od-sphere" className={dmSans.className}>
-                                      Esfera
-                                    </Label>
-                                    <Input
-                                      id="od-sphere"
-                                      value={prescription.rightEye.sphere ?? ''}
-                                      onChange={(event) =>
-                                        updatePrescription('rightEye', 'sphere', event.target.value)
-                                      }
-                                      placeholder="-1.25"
-                                    />
-                                  </div>
-                                  <div className="space-y-1.5">
-                                    <Label htmlFor="od-cylinder" className={dmSans.className}>
-                                      Cilindro
-                                    </Label>
-                                    <Input
-                                      id="od-cylinder"
-                                      value={prescription.rightEye.cylinder ?? ''}
-                                      onChange={(event) =>
-                                        updatePrescription(
-                                          'rightEye',
-                                          'cylinder',
-                                          event.target.value
-                                        )
-                                      }
-                                      placeholder="-0.50"
-                                    />
-                                  </div>
-                                  <div className="space-y-1.5">
-                                    <Label htmlFor="od-axis" className={dmSans.className}>
-                                      Eje
-                                    </Label>
-                                    <Input
-                                      id="od-axis"
-                                      value={prescription.rightEye.axis ?? ''}
-                                      onChange={(event) =>
-                                        updatePrescription('rightEye', 'axis', event.target.value)
-                                      }
-                                      placeholder="90"
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div className="space-y-3">
-                                <p
-                                  className={
-                                    dmSans.className + ' text-sm font-semibold text-[#0F0F0D]'
-                                  }
-                                >
-                                  Ojo izquierdo (OI)
-                                </p>
-                                <div className="grid gap-3 sm:grid-cols-3">
-                                  <div className="space-y-1.5">
-                                    <Label htmlFor="oi-sphere" className={dmSans.className}>
-                                      Esfera
-                                    </Label>
-                                    <Input
-                                      id="oi-sphere"
-                                      value={prescription.leftEye.sphere ?? ''}
-                                      onChange={(event) =>
-                                        updatePrescription('leftEye', 'sphere', event.target.value)
-                                      }
-                                      placeholder="-1.00"
-                                    />
-                                  </div>
-                                  <div className="space-y-1.5">
-                                    <Label htmlFor="oi-cylinder" className={dmSans.className}>
-                                      Cilindro
-                                    </Label>
-                                    <Input
-                                      id="oi-cylinder"
-                                      value={prescription.leftEye.cylinder ?? ''}
-                                      onChange={(event) =>
-                                        updatePrescription(
-                                          'leftEye',
-                                          'cylinder',
-                                          event.target.value
-                                        )
-                                      }
-                                      placeholder="-0.25"
-                                    />
-                                  </div>
-                                  <div className="space-y-1.5">
-                                    <Label htmlFor="oi-axis" className={dmSans.className}>
-                                      Eje
-                                    </Label>
-                                    <Input
-                                      id="oi-axis"
-                                      value={prescription.leftEye.axis ?? ''}
-                                      onChange={(event) =>
-                                        updatePrescription('leftEye', 'axis', event.target.value)
-                                      }
-                                      placeholder="80"
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="grid gap-4 md:grid-cols-2">
-                              <div className="space-y-1.5">
-                                <Label htmlFor="pd" className={dmSans.className}>
-                                  Distancia pupilar (PD)
-                                </Label>
-                                <Input
-                                  id="pd"
-                                  value={prescription.pd ?? ''}
-                                  onChange={(event) =>
-                                    setPrescription((current) => ({
-                                      ...current,
-                                      pd: event.target.value,
-                                    }))
-                                  }
-                                  placeholder="62"
-                                />
-                              </div>
-                              <div className="space-y-1.5">
-                                <Label htmlFor="add-power" className={dmSans.className}>
-                                  Adicion
-                                </Label>
-                                <Input
-                                  id="add-power"
-                                  value={prescription.addPower ?? ''}
-                                  onChange={(event) =>
-                                    setPrescription((current) => ({
-                                      ...current,
-                                      addPower: event.target.value,
-                                    }))
-                                  }
-                                  placeholder="+1.50"
-                                />
-                              </div>
-                            </div>
-
-                            <div className="space-y-1.5">
-                              <Label htmlFor="prescription-notes" className={dmSans.className}>
-                                Notas adicionales
-                              </Label>
-                              <Textarea
-                                id="prescription-notes"
-                                rows={3}
-                                value={prescription.notes ?? ''}
-                                onChange={(event) =>
-                                  setPrescription((current) => ({
-                                    ...current,
-                                    notes: event.target.value,
-                                  }))
-                                }
-                                placeholder="Ej. uso permanente, trabajo en pantalla, etc."
-                              />
-                            </div>
-
-                            <label className="flex items-start gap-3 rounded-xl border border-[#E8D8B7] bg-[#FFF9EE] px-4 py-3 text-sm text-[#51483A]">
-                              <Checkbox
-                                checked={prescription.legalConsent}
-                                onCheckedChange={(checked) =>
-                                  setPrescription((current) => ({
-                                    ...current,
-                                    legalConsent: Boolean(checked),
-                                  }))
-                                }
-                              />
-                              <span className={dmSans.className}>
-                                Autorizo a OpticaAI a almacenar y tratar mi formula para este
-                                pedido.
-                              </span>
-                            </label>
-                          </div>
-                        ) : prescription.mode === 'upload' ? (
-                          <div className="space-y-5">
-                            <div className="space-y-1.5">
-                              <Label htmlFor="prescription-upload" className={dmSans.className}>
-                                Imagen de la formula
-                              </Label>
-                              <Input
-                                id="prescription-upload"
-                                type="file"
-                                accept="image/png,image/jpeg,image/webp"
-                                onChange={(event) => {
-                                  const file = event.target.files?.[0] ?? null
-                                  void handlePrescriptionUpload(file)
-                                }}
-                                disabled={isUploadingPrescription}
-                                className="h-auto py-2"
-                              />
-                              <p className={dmSans.className + ' text-xs text-[#7C776F]'}>
-                                Formatos permitidos: JPG, PNG o WEBP.
-                              </p>
-                            </div>
-
-                            <div className="rounded-xl border border-[#ECE5D8] bg-white p-4 text-sm text-[#5B554C]">
-                              {isUploadingPrescription ? (
-                                <p className={dmSans.className}>Cargando formula...</p>
-                              ) : prescription.imagePath ? (
-                                <div className="space-y-1">
-                                  <p className={dmSans.className + ' font-semibold text-[#0F0F0D]'}>
-                                    Formula adjunta
-                                  </p>
-                                  <p className={dmSans.className}>
-                                    {prescription.imageFileName ?? 'Archivo cargado'}
-                                  </p>
-                                </div>
-                              ) : (
-                                <p className={dmSans.className}>
-                                  Aun no has adjuntado una formula.
-                                </p>
-                              )}
-                            </div>
-
-                            <div className="space-y-1.5">
-                              <Label
-                                htmlFor="upload-prescription-notes"
-                                className={dmSans.className}
+                      {/* Filters */}
+                      <div className="space-y-4">
+                        <h4
+                          className={
+                            dmSans.className +
+                            ' text-xs font-bold tracking-widest text-[#8A6A2F] uppercase'
+                          }
+                        >
+                          Filtros adicionales
+                        </h4>
+                        <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+                          {filters.map((opt) => {
+                            const active = selection.filters.some((f) => f.id === opt.id)
+                            return (
+                              <button
+                                key={opt.id}
+                                onClick={() => toggleFilter(opt, !active)}
+                                className={cn(
+                                  'rounded-xl border p-4 text-left transition-all',
+                                  active
+                                    ? 'border-[#D4A853] bg-[#FFF9EE]'
+                                    : 'border-[#E6DECF] hover:border-[#D4A853]'
+                                )}
                               >
-                                Observaciones
-                              </Label>
-                              <Textarea
-                                id="upload-prescription-notes"
-                                rows={3}
-                                value={prescription.notes ?? ''}
-                                onChange={(event) =>
-                                  setPrescription((current) => ({
-                                    ...current,
-                                    notes: event.target.value,
-                                  }))
-                                }
-                                placeholder="Comentarios sobre tu formula"
-                              />
-                            </div>
+                                <p className={dmSans.className + ' text-sm font-bold'}>
+                                  {opt.name}
+                                </p>
+                                <p className={dmSans.className + ' mt-1 text-xs text-[#8A6A2F]'}>
+                                  +{formatCOP(opt.price_addition)}
+                                </p>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
 
-                            <label className="flex items-start gap-3 rounded-xl border border-[#E8D8B7] bg-[#FFF9EE] px-4 py-3 text-sm text-[#51483A]">
-                              <Checkbox
-                                checked={prescription.legalConsent}
-                                onCheckedChange={(checked) =>
-                                  setPrescription((current) => ({
-                                    ...current,
-                                    legalConsent: Boolean(checked),
-                                  }))
-                                }
-                              />
-                              <span className={dmSans.className}>
-                                Autorizo a OpticaAI a almacenar la imagen de mi formula.
-                              </span>
-                            </label>
+                      {/* Tint */}
+                      <div className="space-y-4">
+                        <h4
+                          className={
+                            dmSans.className +
+                            ' text-xs font-bold tracking-widest text-[#8A6A2F] uppercase'
+                          }
+                        >
+                          Tinte
+                        </h4>
+                        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                          {tints.map((opt) => (
+                            <button
+                              key={opt.id}
+                              onClick={() => setSelection((prev) => ({ ...prev, tint: opt }))}
+                              className={cn(
+                                'rounded-xl border p-4 text-left transition-all',
+                                selection.tint?.id === opt.id
+                                  ? 'border-[#D4A853] bg-[#FFF9EE]'
+                                  : 'border-[#E6DECF] hover:border-[#D4A853]'
+                              )}
+                            >
+                              <p className={dmSans.className + ' text-sm font-bold'}>{opt.name}</p>
+                              <p className={dmSans.className + ' mt-1 text-xs text-[#8A6A2F]'}>
+                                +{formatCOP(opt.price_addition)}
+                              </p>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Thickness */}
+                      <div className="space-y-4">
+                        <h4
+                          className={
+                            dmSans.className +
+                            ' text-xs font-bold tracking-widest text-[#8A6A2F] uppercase'
+                          }
+                        >
+                          Grosor
+                        </h4>
+                        <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+                          {thicknesses.map((opt) => (
+                            <button
+                              key={opt.id}
+                              onClick={() => setSelection((prev) => ({ ...prev, thickness: opt }))}
+                              className={cn(
+                                'rounded-xl border p-4 text-left transition-all',
+                                selection.thickness?.id === opt.id
+                                  ? 'border-[#D4A853] bg-[#FFF9EE]'
+                                  : 'border-[#E6DECF] hover:border-[#D4A853]'
+                              )}
+                            >
+                              <p className={dmSans.className + ' text-sm font-bold'}>{opt.name}</p>
+                              <p className={dmSans.className + ' mt-1 text-xs text-[#8A6A2F]'}>
+                                +{formatCOP(opt.price_addition)}
+                              </p>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {step === 'prescription' && (
+                <div className="space-y-10">
+                  <header>
+                    <h2
+                      className={
+                        playfairDisplay.className + ' text-3xl font-semibold text-[#0F0F0D]'
+                      }
+                    >
+                      Tu fórmula oftálmica
+                    </h2>
+                    <p className={dmSans.className + ' mt-2 text-[#66665F]'}>
+                      Ingresa los datos de tu prescripción médica.
+                    </p>
+                  </header>
+
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    {[
+                      {
+                        key: 'manual' as const,
+                        title: 'Diligenciar ahora',
+                        copy: 'Tengo mi fórmula a la mano.',
+                      },
+                      {
+                        key: 'upload' as const,
+                        title: 'Subir imagen',
+                        copy: 'Adjunto foto de la fórmula.',
+                      },
+                      {
+                        key: 'pending' as const,
+                        title: 'Enviar después',
+                        copy: 'La comparto luego por WhatsApp.',
+                      },
+                    ].map((m) => (
+                      <button
+                        key={m.key}
+                        onClick={() => setPrescription((p) => ({ ...p, mode: m.key }))}
+                        className={cn(
+                          'rounded-xl border p-5 text-left transition-all',
+                          prescription.mode === m.key
+                            ? 'border-[#D4A853] bg-[#FFF9EE]'
+                            : 'border-[#E6DECF] hover:border-[#D4A853]'
+                        )}
+                      >
+                        <p className={dmSans.className + ' text-sm font-bold'}>{m.title}</p>
+                        <p className={dmSans.className + ' mt-1 text-xs text-[#66665F]'}>
+                          {m.copy}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="rounded-2xl border border-[#E6DECF] bg-[#FCFBF8] p-6 lg:p-8">
+                    {prescription.mode === 'manual' && (
+                      <div className="space-y-8">
+                        <div className="grid gap-8 xl:grid-cols-2">
+                          {['rightEye', 'leftEye'].map((eye) => (
+                            <div key={eye} className="space-y-4">
+                              <p className={dmSans.className + ' text-sm font-bold text-[#0F0F0D]'}>
+                                {eye === 'rightEye' ? 'Ojo derecho (OD)' : 'Ojo izquierdo (OI)'}
+                              </p>
+                              <div className="grid grid-cols-3 gap-4">
+                                {['sphere', 'cylinder', 'axis'].map((field) => (
+                                  <div key={field} className="space-y-1.5">
+                                    <Label className="text-[10px] font-bold tracking-wider text-[#8A6A2F] uppercase">
+                                      {field === 'sphere'
+                                        ? 'Esfera'
+                                        : field === 'cylinder'
+                                          ? 'Cilindro'
+                                          : 'Eje'}
+                                    </Label>
+                                    <Input
+                                      value={
+                                        (prescription[eye as 'rightEye' | 'leftEye'] as any)[
+                                          field
+                                        ] ?? ''
+                                      }
+                                      onChange={(e) =>
+                                        updatePrescription(eye as any, field as any, e.target.value)
+                                      }
+                                      placeholder="0.00"
+                                      className="rounded-lg border-[#DCCFB9] bg-white text-sm"
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="grid grid-cols-2 gap-8">
+                          <div className="space-y-1.5">
+                            <Label className="text-[10px] font-bold tracking-wider text-[#8A6A2F] uppercase">
+                              Distancia Pupilar (PD)
+                            </Label>
+                            <Input
+                              value={prescription.pd ?? ''}
+                              onChange={(e) =>
+                                setPrescription((p) => ({ ...p, pd: e.target.value }))
+                              }
+                              placeholder="62"
+                            />
                           </div>
-                        ) : (
-                          <p className={dmSans.className + ' text-sm leading-7 text-[#66665F]'}>
-                            Puedes agregar la montura y enviar la formula mas adelante por WhatsApp
-                            o durante la confirmacion del pedido.
-                          </p>
+                          <div className="space-y-1.5">
+                            <Label className="text-[10px] font-bold tracking-wider text-[#8A6A2F] uppercase">
+                              Adición
+                            </Label>
+                            <Input
+                              value={prescription.addPower ?? ''}
+                              onChange={(e) =>
+                                setPrescription((p) => ({ ...p, addPower: e.target.value }))
+                              }
+                              placeholder="+1.50"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {prescription.mode === 'upload' && (
+                      <div className="space-y-6">
+                        <div className="space-y-2">
+                          <Label className="text-sm font-bold">Imagen de la fórmula</Label>
+                          <Input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => handlePrescriptionUpload(e.target.files?.[0] ?? null)}
+                            disabled={isUploadingPrescription}
+                            className="h-auto py-2"
+                          />
+                        </div>
+                        {prescription.imageFileName && (
+                          <div className="flex items-center gap-2 text-sm text-[#0F0F0D]">
+                            <Check size={16} className="text-green-600" />
+                            <span>{prescription.imageFileName}</span>
+                          </div>
                         )}
                       </div>
-                    </section>
-                  </>
-                )}
-              </div>
+                    )}
+
+                    {prescription.mode === 'pending' && (
+                      <p className={dmSans.className + ' text-sm leading-relaxed text-[#66665F]'}>
+                        No te preocupes, puedes continuar con tu compra y enviarnos una foto de tu
+                        fórmula por WhatsApp. Un asesor te contactará para confirmar los detalles.
+                      </p>
+                    )}
+
+                    {(prescription.mode === 'manual' || prescription.mode === 'upload') && (
+                      <div className="mt-8 border-t border-[#E6DECF] pt-8">
+                        <label className="flex items-start gap-4">
+                          <Checkbox
+                            checked={prescription.legalConsent}
+                            onCheckedChange={(val) =>
+                              setPrescription((p) => ({ ...p, legalConsent: !!val }))
+                            }
+                            className="mt-1"
+                          />
+                          <span className={dmSans.className + ' text-xs leading-5 text-[#66665F]'}>
+                            Autorizo el tratamiento de mis datos de salud y confirmo que la
+                            información proporcionada es correcta según mi prescripción médica.
+                          </span>
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {step === 'summary' && (
+                <div className="space-y-10">
+                  <header>
+                    <h2
+                      className={
+                        playfairDisplay.className + ' text-3xl font-semibold text-[#0F0F0D]'
+                      }
+                    >
+                      Resumen de configuración
+                    </h2>
+                    <p className={dmSans.className + ' mt-2 text-[#66665F]'}>
+                      Verifica los detalles antes de agregar al carrito.
+                    </p>
+                  </header>
+
+                  <div className="divide-y divide-[#E6DECF] rounded-2xl border border-[#E6DECF] bg-[#F4EEE1]/30">
+                    <div className="p-6 lg:p-8">
+                      <p
+                        className={
+                          dmSans.className +
+                          ' text-[10px] font-bold tracking-widest text-[#8A6A2F] uppercase'
+                        }
+                      >
+                        Montura
+                      </p>
+                      <div className="mt-2 flex items-center justify-between">
+                        <p className={dmSans.className + ' font-semibold text-[#0F0F0D]'}>
+                          {product.name}
+                        </p>
+                        <p className={dmSans.className + ' text-sm text-[#0F0F0D]'}>
+                          {formatCOP(product.price)}
+                        </p>
+                      </div>
+                    </div>
+
+                    {isLensRequired && (
+                      <div className="space-y-4 p-6 lg:p-8">
+                        <p
+                          className={
+                            dmSans.className +
+                            ' text-[10px] font-bold tracking-widest text-[#8A6A2F] uppercase'
+                          }
+                        >
+                          Lentes y Tratamientos
+                        </p>
+                        <ul className="space-y-2">
+                          {[
+                            {
+                              label: 'Tipo',
+                              value: selection.type?.name,
+                              price: selection.type?.price_addition,
+                            },
+                            {
+                              label: 'Material',
+                              value: selection.material?.name,
+                              price: selection.material?.price_addition,
+                            },
+                            ...selection.filters.map((f) => ({
+                              label: 'Filtro',
+                              value: f.name,
+                              price: f.price_addition,
+                            })),
+                            {
+                              label: 'Tinte',
+                              value: selection.tint?.name,
+                              price: selection.tint?.price_addition,
+                            },
+                            {
+                              label: 'Grosor',
+                              value: selection.thickness?.name,
+                              price: selection.thickness?.price_addition,
+                            },
+                          ]
+                            .filter((i) => i.value)
+                            .map((item, idx) => (
+                              <li key={idx} className="flex items-center justify-between text-sm">
+                                <span className="text-[#66665F]">
+                                  {item.label}: {item.value}
+                                </span>
+                                <span className="font-medium text-[#0F0F0D]">
+                                  {item.price ? `+ ${formatCOP(item.price)}` : 'Incluido'}
+                                </span>
+                              </li>
+                            ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    <div className="p-6 lg:p-8">
+                      <p
+                        className={
+                          dmSans.className +
+                          ' text-[10px] font-bold tracking-widest text-[#8A6A2F] uppercase'
+                        }
+                      >
+                        Fórmula
+                      </p>
+                      <p className={dmSans.className + ' mt-2 text-sm text-[#0F0F0D]'}>
+                        {prescription.mode === 'manual'
+                          ? 'Ingreso manual'
+                          : prescription.mode === 'upload'
+                            ? 'Archivo adjunto'
+                            : 'Envío posterior'}
+                      </p>
+                    </div>
+
+                    <div className="bg-[#F4EEE1] p-6 lg:p-8">
+                      <div className="flex items-center justify-between">
+                        <p
+                          className={
+                            playfairDisplay.className + ' text-xl font-bold text-[#0F0F0D]'
+                          }
+                        >
+                          Total
+                        </p>
+                        <p
+                          className={
+                            playfairDisplay.className + ' text-2xl font-bold text-[#8A6A2F]'
+                          }
+                        >
+                          {formatCOP(finalPrice)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
-            <div className="border-t border-[#E6DECF] bg-white px-5 py-4 lg:px-8">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className={dmSans.className + ' text-xs text-[#7B776E]'}>Resumen actual</p>
-                  <p className={dmSans.className + ' text-sm font-medium text-[#0F0F0D]'}>
-                    {summaryMessage}
-                  </p>
-                </div>
+            {/* Footer Actions */}
+            <div className="border-t border-[#E6DECF] bg-white p-6 lg:px-10">
+              <div className="flex items-center justify-between">
                 <Button
-                  onClick={handleAddToCart}
-                  className={
-                    dmSans.className +
-                    ' h-11 min-w-[260px] rounded-full bg-[#D4A853] px-6 text-sm font-semibold text-[#0F0F0D] hover:bg-[#C79D4C]'
-                  }
+                  variant="ghost"
+                  onClick={() => {
+                    if (step === 'prescription') setStep('lenses')
+                    if (step === 'summary') setStep('prescription')
+                  }}
+                  className={cn(
+                    'rounded-full px-6 text-[#8A6A2F] hover:bg-[#F4EEE1]',
+                    step === 'lenses' && 'invisible'
+                  )}
                 >
-                  Guardar y agregar al carrito
+                  <ChevronLeft className="mr-2 h-4 w-4" />
+                  Atrás
                 </Button>
+
+                {step !== 'summary' ? (
+                  <Button
+                    onClick={() => {
+                      if (step === 'lenses') setStep('prescription')
+                      else if (step === 'prescription') setStep('summary')
+                    }}
+                    disabled={step === 'lenses' && isLensRequired && !selection.type}
+                    className="rounded-full bg-[#0F0F0D] px-10 text-white hover:bg-[#2C2C26]"
+                  >
+                    Siguiente
+                    <ChevronRight className="ml-2 h-4 w-4" />
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={handleAddToCart}
+                    className="rounded-full bg-[#D4A853] px-12 font-bold text-[#0F0F0D] hover:bg-[#C79D4C]"
+                  >
+                    Agregar al carrito
+                  </Button>
+                )}
               </div>
             </div>
           </section>
