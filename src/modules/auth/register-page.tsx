@@ -28,8 +28,11 @@ const registerSchema = z
     phone: z.string().refine((value) => isValidColombianPhone(value), 'Numero colombiano invalido'),
     password: z
       .string()
-      .min(8, 'La contrasena debe tener minimo 8 caracteres')
-      .regex(/\d/, 'La contrasena debe incluir al menos 1 numero'),
+      .min(10, 'La contrasena debe tener minimo 10 caracteres')
+      .regex(/[A-Z]/, 'La contrasena debe incluir al menos 1 mayuscula')
+      .regex(/[a-z]/, 'La contrasena debe incluir al menos 1 minuscula')
+      .regex(/\d/, 'La contrasena debe incluir al menos 1 numero')
+      .regex(/[^A-Za-z0-9]/, 'La contrasena debe incluir al menos 1 simbolo'),
     confirmPassword: z.string(),
   })
   .refine((data) => data.password === data.confirmPassword, {
@@ -49,13 +52,17 @@ type PasswordStrength = {
 }
 
 function getPasswordStrength(password: string): PasswordStrength {
+  const hasUpper = /[A-Z]/.test(password)
+  const hasLower = /[a-z]/.test(password)
   const hasNumber = /\d/.test(password)
+  const hasSymbol = /[^A-Za-z0-9]/.test(password)
+  const score = [hasUpper, hasLower, hasNumber, hasSymbol].filter(Boolean).length
 
-  if (password.length >= 12 && hasNumber) {
+  if (password.length >= 12 && score >= 4) {
     return { label: 'fuerte', className: 'text-green-600' }
   }
 
-  if (password.length >= 8 && hasNumber) {
+  if (password.length >= 10 && score >= 3) {
     return { label: 'media', className: 'text-amber-600' }
   }
 
@@ -224,7 +231,7 @@ export function RegisterPage({ redirectTo }: RegisterPageProps) {
 
         <CardFooter className="flex-col gap-2">
           <p className="text-muted-foreground text-sm">
-            ?Ya tienes cuenta?{' '}
+            ¿Ya tienes cuenta?{' '}
             <Link href="/login" className="text-primary font-medium hover:underline">
               Inicia sesion
             </Link>

@@ -33,6 +33,7 @@ type NavItem = {
 const principalItems: NavItem[] = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
   { label: 'Pedidos', href: '/admin/pedidos', icon: ShoppingBag },
+  { label: 'Usuarios', href: '/admin/usuarios', icon: Users },
   { label: 'Clientes', href: '/admin/clientes', icon: Users },
 ]
 

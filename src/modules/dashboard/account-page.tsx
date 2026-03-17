@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useTransition } from 'react'
 import { DM_Sans, Playfair_Display } from 'next/font/google'
 
+import { updatePasswordAction, updateProfileAction } from '@/actions/auth.actions'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -46,11 +47,78 @@ type AccountPageProps = {
   fullName: string | null
   email: string
   phone: string | null
+  address: string | null
+  city: string | null
   orders: OrderWithItems[]
 }
 
-export function AccountPage({ fullName, email, phone, orders }: AccountPageProps) {
+export function AccountPage({ fullName, email, phone, address, city, orders }: AccountPageProps) {
   const [tab, setTab] = useState<'pedidos' | 'perfil'>('pedidos')
+  const [isPending, startTransition] = useTransition()
+  const [fullNameValue, setFullNameValue] = useState(fullName ?? '')
+  const [phoneValue, setPhoneValue] = useState(phone ?? '')
+  const [addressValue, setAddressValue] = useState(address ?? '')
+  const [cityValue, setCityValue] = useState(city ?? 'Colombia')
+  const [currentPasswordValue, setCurrentPasswordValue] = useState('')
+  const [passwordValue, setPasswordValue] = useState('')
+  const [passwordConfirmValue, setPasswordConfirmValue] = useState('')
+  const [profileMessage, setProfileMessage] = useState<string | null>(null)
+  const [passwordMessage, setPasswordMessage] = useState<string | null>(null)
+  const [profileError, setProfileError] = useState<string | null>(null)
+  const [passwordError, setPasswordError] = useState<string | null>(null)
+
+  const saveProfile = () => {
+    setProfileMessage(null)
+    setProfileError(null)
+
+    startTransition(async () => {
+      const result = await updateProfileAction({
+        full_name: fullNameValue,
+        phone: phoneValue,
+        address: addressValue,
+        city: cityValue,
+      })
+
+      if (!result.success) {
+        setProfileError(result.error ?? 'No se pudo actualizar tu perfil')
+        return
+      }
+
+      setProfileMessage('Perfil actualizado correctamente')
+    })
+  }
+
+  const changePassword = () => {
+    setPasswordMessage(null)
+    setPasswordError(null)
+
+    if (passwordValue !== passwordConfirmValue) {
+      setPasswordError('Las contrasenas no coinciden')
+      return
+    }
+
+    if (!currentPasswordValue.trim()) {
+      setPasswordError('Debes ingresar tu contrasena actual')
+      return
+    }
+
+    startTransition(async () => {
+      const result = await updatePasswordAction({
+        currentPassword: currentPasswordValue,
+        newPassword: passwordValue,
+      })
+
+      if (!result.success) {
+        setPasswordError(result.error ?? 'No se pudo cambiar la contrasena')
+        return
+      }
+
+      setCurrentPasswordValue('')
+      setPasswordValue('')
+      setPasswordConfirmValue('')
+      setPasswordMessage('Contrasena actualizada correctamente')
+    })
+  }
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 px-4 py-8">
@@ -91,14 +159,10 @@ export function AccountPage({ fullName, email, phone, orders }: AccountPageProps
                 className="space-y-3 rounded-xl border border-[#E2DDD6] bg-white p-5"
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span
-                    className={cn(dmSans.className, 'text-sm font-semibold text-[#0F0F0D]')}
-                  >
+                  <span className={cn(dmSans.className, 'text-sm font-semibold text-[#0F0F0D]')}>
                     Pedido #{order.order_number}
                   </span>
-                  <Badge
-                    className={cn(STATUS_COLORS[order.status] ?? 'bg-gray-100 text-gray-800')}
-                  >
+                  <Badge className={cn(STATUS_COLORS[order.status] ?? 'bg-gray-100 text-gray-800')}>
                     {STATUS_LABELS[order.status] ?? order.status}
                   </Badge>
                 </div>
@@ -146,7 +210,11 @@ export function AccountPage({ fullName, email, phone, orders }: AccountPageProps
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label className={dmSans.className}>Nombre completo</Label>
-              <Input value={fullName ?? ''} disabled className="bg-[#F6F3EE]" readOnly />
+              <Input
+                value={fullNameValue}
+                onChange={(e) => setFullNameValue(e.target.value)}
+                className="bg-[#F6F3EE]"
+              />
             </div>
             <div className="space-y-1.5">
               <Label className={dmSans.className}>Email</Label>
@@ -154,12 +222,98 @@ export function AccountPage({ fullName, email, phone, orders }: AccountPageProps
             </div>
             <div className="space-y-1.5">
               <Label className={dmSans.className}>Teléfono</Label>
-              <Input value={phone ?? '—'} disabled className="bg-[#F6F3EE]" readOnly />
+              <Input
+                value={phoneValue}
+                onChange={(e) => setPhoneValue(e.target.value)}
+                className="bg-[#F6F3EE]"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className={dmSans.className}>Ciudad</Label>
+              <Input
+                value={cityValue}
+                onChange={(e) => setCityValue(e.target.value)}
+                className="bg-[#F6F3EE]"
+              />
             </div>
           </div>
-          <p className={cn(dmSans.className, 'text-xs text-[#6E6E67]')}>
-            Para actualizar tus datos contacta a nuestro equipo.
-          </p>
+
+          <div className="space-y-1.5">
+            <Label className={dmSans.className}>Dirección</Label>
+            <Input
+              value={addressValue}
+              onChange={(e) => setAddressValue(e.target.value)}
+              className="bg-[#F6F3EE]"
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={saveProfile}
+            disabled={isPending}
+            className="rounded-full bg-[#0F0F0D] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isPending ? 'Guardando...' : 'Guardar perfil'}
+          </button>
+
+          {profileMessage ? (
+            <p className={cn(dmSans.className, 'text-sm text-green-700')}>{profileMessage}</p>
+          ) : null}
+          {profileError ? (
+            <p className={cn(dmSans.className, 'text-sm text-red-600')}>{profileError}</p>
+          ) : null}
+
+          <div className="mt-4 space-y-3 rounded-lg border border-[#EFE9DF] bg-[#FCFBF8] p-4">
+            <h3 className={cn(playfairDisplay.className, 'text-xl font-semibold text-[#0F0F0D]')}>
+              Seguridad
+            </h3>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="space-y-1.5">
+                <Label className={dmSans.className}>Contrasena actual</Label>
+                <Input
+                  type="password"
+                  value={currentPasswordValue}
+                  onChange={(e) => setCurrentPasswordValue(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className={dmSans.className}>Nueva contrasena</Label>
+                <Input
+                  type="password"
+                  value={passwordValue}
+                  onChange={(e) => setPasswordValue(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className={dmSans.className}>Confirmar contrasena</Label>
+                <Input
+                  type="password"
+                  value={passwordConfirmValue}
+                  onChange={(e) => setPasswordConfirmValue(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={changePassword}
+              disabled={isPending}
+              className="rounded-full border border-[#0F0F0D] px-4 py-2 text-sm font-semibold text-[#0F0F0D] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isPending ? 'Actualizando...' : 'Cambiar contrasena'}
+            </button>
+
+            <p className={cn(dmSans.className, 'text-xs text-[#6E6E67]')}>
+              Usa minimo 10 caracteres, mayuscula, minuscula, numero y simbolo.
+            </p>
+
+            {passwordMessage ? (
+              <p className={cn(dmSans.className, 'text-sm text-green-700')}>{passwordMessage}</p>
+            ) : null}
+            {passwordError ? (
+              <p className={cn(dmSans.className, 'text-sm text-red-600')}>{passwordError}</p>
+            ) : null}
+          </div>
         </section>
       )}
     </div>

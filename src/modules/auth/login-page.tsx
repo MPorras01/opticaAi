@@ -31,9 +31,16 @@ type LoginFormValues = z.infer<typeof loginSchema>
 type LoginPageProps = {
   registered?: boolean
   redirectTo?: string
+  expired?: boolean
+  reset?: boolean
 }
 
-export function LoginPage({ registered = false, redirectTo }: LoginPageProps) {
+export function LoginPage({
+  registered = false,
+  redirectTo,
+  expired = false,
+  reset = false,
+}: LoginPageProps) {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
@@ -79,6 +86,22 @@ export function LoginPage({ registered = false, redirectTo }: LoginPageProps) {
             </Alert>
           ) : null}
 
+          {expired ? (
+            <Alert className="border-amber-200 bg-amber-50 text-amber-800">
+              <AlertDescription>
+                Tu sesion expiro por seguridad. Inicia sesion nuevamente.
+              </AlertDescription>
+            </Alert>
+          ) : null}
+
+          {reset ? (
+            <Alert className="border-green-200 bg-green-50 text-green-800">
+              <AlertDescription>
+                Tu contrasena fue actualizada. Inicia sesion con la nueva clave.
+              </AlertDescription>
+            </Alert>
+          ) : null}
+
           <form className="space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
             <div className="space-y-2">
               <Label htmlFor="email">Correo electronico</Label>
@@ -113,8 +136,11 @@ export function LoginPage({ registered = false, redirectTo }: LoginPageProps) {
             </div>
 
             <div className="flex justify-end">
-              <Link href="#" className="text-muted-foreground text-sm hover:underline">
-                ?Olvidaste tu contrasena?
+              <Link
+                href="/recuperar-contrasena"
+                className="text-muted-foreground text-sm hover:underline"
+              >
+                ¿Olvidaste tu contrasena?
               </Link>
             </div>
 
@@ -135,7 +161,7 @@ export function LoginPage({ registered = false, redirectTo }: LoginPageProps) {
 
         <CardFooter className="flex-col gap-2">
           <p className="text-muted-foreground text-sm">
-            ?No tienes cuenta?{' '}
+            ¿No tienes cuenta?{' '}
             <Link href="/registro" className="text-primary font-medium hover:underline">
               Registrate
             </Link>
