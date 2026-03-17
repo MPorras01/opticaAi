@@ -20,7 +20,7 @@ export default async function CuentaRoute() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('full_name, phone')
+    .select('full_name, phone, address, city')
     .eq('id', user.id)
     .single()
 
@@ -31,6 +31,8 @@ export default async function CuentaRoute() {
       fullName={profile?.full_name ?? null}
       email={user.email ?? ''}
       phone={profile?.phone ?? null}
+      address={profile?.address ?? null}
+      city={profile?.city ?? null}
       orders={orders}
     />
   )
