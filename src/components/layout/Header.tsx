@@ -139,7 +139,7 @@ export function Header() {
                 'hidden rounded-full bg-[#D4A853] px-4 text-[#0F0F0D] shadow-[0_14px_30px_-18px_rgba(212,168,83,0.95)] transition duration-300 hover:scale-[1.02] hover:bg-[#C79D4C] sm:inline-flex'
               )}
             >
-              Agendar cita
+              Mi cuenta
             </Button>
           </Link>
 

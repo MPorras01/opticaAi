@@ -19,7 +19,7 @@ const playfairDisplay = Playfair_Display({
 const exploreLinks = [
   { label: 'Catalogo', href: '/catalogo' },
   { label: 'Probador Virtual', href: '/probador-virtual' },
-  { label: 'Agendar Cita', href: '/cuenta' },
+  { label: 'Mi cuenta', href: '/cuenta' },
   { label: 'Contacto', href: '/contacto' },
 ]
 
