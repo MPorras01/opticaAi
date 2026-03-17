@@ -364,12 +364,35 @@ export function CheckoutPage() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-[#0F0F0D]">{item.name}</p>
                     <p className="text-xs text-[#6E6E67]">
-                      {item.lensType ? LENS_TYPE_LABELS[item.lensType] : 'Sin especificar'} · ×
-                      {item.quantity}
+                      {item.lensSelection?.type
+                        ? `Lente: ${item.lensSelection.type}`
+                        : item.lensType
+                          ? LENS_TYPE_LABELS[item.lensType]
+                          : 'Sin especificar'}{' '}
+                      · ×{item.quantity}
                     </p>
-                    {item.lensFilters?.length ? (
+                    {item.lensSelection?.filters?.length ? (
+                      <p className="mt-1 text-[11px] text-[#8A877F]">
+                        {item.lensSelection.filters.join(', ')}
+                      </p>
+                    ) : item.lensFilters?.length ? (
                       <p className="mt-1 text-[11px] text-[#8A877F]">
                         {item.lensFilters.map((filter) => LENS_FILTER_LABELS[filter]).join(', ')}
+                      </p>
+                    ) : null}
+                    {item.lensSelection?.material ? (
+                      <p className="mt-1 text-[11px] text-[#8A877F]">
+                        Material: {item.lensSelection.material}
+                      </p>
+                    ) : null}
+                    {item.lensSelection?.tint ? (
+                      <p className="mt-1 text-[11px] text-[#8A877F]">
+                        Tinte: {item.lensSelection.tint}
+                      </p>
+                    ) : null}
+                    {item.lensSelection?.thickness ? (
+                      <p className="mt-1 text-[11px] text-[#8A877F]">
+                        Grosor: {item.lensSelection.thickness}
                       </p>
                     ) : null}
                     {item.prescription?.mode === 'manual' && hasPrescriptionDetails(item.prescription) ? (

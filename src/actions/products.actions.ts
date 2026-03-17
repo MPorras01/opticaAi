@@ -47,8 +47,12 @@ function getErrorMessage(error: unknown): string {
     const code = typeof errorRecord.code === 'string' ? errorRecord.code : ''
 
     if (message || details || hint || code) {
-      const parts = [message, details, hint ? `Sugerencia: ${hint}` : '', code ? `Codigo: ${code}` : '']
-        .filter(Boolean)
+      const parts = [
+        message,
+        details,
+        hint ? `Sugerencia: ${hint}` : '',
+        code ? `Codigo: ${code}` : '',
+      ].filter(Boolean)
       return parts.join(' | ')
     }
   }
@@ -57,14 +61,18 @@ function getErrorMessage(error: unknown): string {
 }
 
 function normalizeMaterial(value: FormDataEntryValue | null): string | null {
-  const raw = String(value ?? '').trim().toLowerCase()
+  const raw = String(value ?? '')
+    .trim()
+    .toLowerCase()
   if (!raw) return null
   if (raw === 'tr90') return 'plastico'
   return raw
 }
 
 function normalizeGender(value: FormDataEntryValue | null): string | null {
-  const raw = String(value ?? '').trim().toLowerCase()
+  const raw = String(value ?? '')
+    .trim()
+    .toLowerCase()
   if (!raw) return null
   if (raw === 'ninos') return 'niños'
   return raw
@@ -200,7 +208,9 @@ export async function uploadProductImage(file: File, productSlug: string): Promi
   })
 
   if (error) {
-    throw new Error(`No se pudo subir imagen de producto: ${getStorageErrorMessage(error, 'imagen')}`)
+    throw new Error(
+      `No se pudo subir imagen de producto: ${getStorageErrorMessage(error, 'imagen')}`
+    )
   }
 
   const { data } = supabase.storage.from('products').getPublicUrl(path)
@@ -244,7 +254,9 @@ export async function uploadArOverlay(
       .eq('id', productId)
 
     if (updateError) {
-      throw new Error(`No se pudo actualizar ar_overlay_url del producto: ${getErrorMessage(updateError)}`)
+      throw new Error(
+        `No se pudo actualizar ar_overlay_url del producto: ${getErrorMessage(updateError)}`
+      )
     }
   }
 
@@ -263,7 +275,9 @@ export async function deleteProductImage(imageUrl: string): Promise<void> {
   const { error } = await supabase.storage.from(parsed.bucket).remove([parsed.path])
 
   if (error) {
-    throw new Error(`No se pudo eliminar imagen del storage: ${getStorageErrorMessage(error, 'imagen')}`)
+    throw new Error(
+      `No se pudo eliminar imagen del storage: ${getStorageErrorMessage(error, 'imagen')}`
+    )
   }
 }
 
@@ -539,12 +553,14 @@ export async function deleteProductAction(id: string): Promise<ActionResult<null
       if (parsed) {
         const { error } = await supabase.storage.from(parsed.bucket).remove([parsed.path])
         if (error) {
-          throw new Error(`No se pudo eliminar overlay AR: ${getStorageErrorMessage(error, 'overlay')}`)
+          throw new Error(
+            `No se pudo eliminar overlay AR: ${getStorageErrorMessage(error, 'overlay')}`
+          )
         }
       }
     }
 
-    const { error } = await supabase.from('products').update({ is_active: false }).eq('id', id)
+    const { error } = await supabase.from('products').delete().eq('id', id)
 
     if (error) {
       throw error
@@ -552,6 +568,7 @@ export async function deleteProductAction(id: string): Promise<ActionResult<null
 
     revalidatePath('/catalogo')
     revalidatePath('/admin/productos')
+    revalidatePath(`/catalogo/${currentProduct.slug}`)
 
     return { success: true, data: null }
   } catch (error) {

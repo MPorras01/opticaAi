@@ -86,8 +86,8 @@ export function ProductActionsMenu({
           <DialogHeader>
             <DialogTitle>Eliminar producto</DialogTitle>
             <DialogDescription>
-              Se desactivara el producto <strong>{productName}</strong> y se limpiaran imagenes en
-              storage cuando aplique.
+              Se eliminara permanentemente el producto <strong>{productName}</strong> y se limpiaran
+              imagenes en storage cuando aplique.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -106,7 +106,7 @@ export function ProductActionsMenu({
                     return
                   }
 
-                  toast.success('Producto desactivado')
+                  toast.success('Producto eliminado')
                   setIsDeleteOpen(false)
                   router.refresh()
                 })

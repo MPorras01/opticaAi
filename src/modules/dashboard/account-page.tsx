@@ -2,8 +2,9 @@
 
 import { useState, useTransition } from 'react'
 import { DM_Sans, Playfair_Display } from 'next/font/google'
+import { useRouter } from 'next/navigation'
 
-import { updatePasswordAction, updateProfileAction } from '@/actions/auth.actions'
+import { signOutAction, updatePasswordAction, updateProfileAction } from '@/actions/auth.actions'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -53,8 +54,10 @@ type AccountPageProps = {
 }
 
 export function AccountPage({ fullName, email, phone, address, city, orders }: AccountPageProps) {
+  const router = useRouter()
   const [tab, setTab] = useState<'pedidos' | 'perfil'>('pedidos')
   const [isPending, startTransition] = useTransition()
+  const [isLogoutPending, startLogoutTransition] = useTransition()
   const [fullNameValue, setFullNameValue] = useState(fullName ?? '')
   const [phoneValue, setPhoneValue] = useState(phone ?? '')
   const [addressValue, setAddressValue] = useState(address ?? '')
@@ -122,9 +125,29 @@ export function AccountPage({ fullName, email, phone, address, city, orders }: A
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 px-4 py-8">
-      <h1 className={cn(playfairDisplay.className, 'text-4xl font-semibold text-[#0F0F0D]')}>
-        Mi cuenta
-      </h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className={cn(playfairDisplay.className, 'text-4xl font-semibold text-[#0F0F0D]')}>
+          Mi cuenta
+        </h1>
+
+        <button
+          type="button"
+          disabled={isLogoutPending}
+          onClick={() => {
+            startLogoutTransition(async () => {
+              const result = await signOutAction()
+              if (!result.success) {
+                return
+              }
+              router.push('/login')
+              router.refresh()
+            })
+          }}
+          className="rounded-full border border-[#0F0F0D] px-4 py-2 text-sm font-semibold text-[#0F0F0D] disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {isLogoutPending ? 'Cerrando sesion...' : 'Cerrar sesion'}
+        </button>
+      </div>
 
       {/* Tab nav */}
       <div className={cn(dmSans.className, 'flex gap-6 border-b border-[#E2DDD6]')}>
